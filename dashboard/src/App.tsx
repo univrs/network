@@ -22,29 +22,35 @@ function App() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-surface-dark text-white">
-      {/* Header */}
-      <header className="border-b border-gray-800 px-6 py-4">
+    <div className="min-h-screen bg-void text-mycelium-white">
+      {/* Header - univrs.io style nav */}
+      <header className="border-b border-border-subtle px-6 py-4 bg-gradient-to-b from-void to-transparent">
         <div className="flex items-center justify-between max-w-7xl mx-auto">
           <div className="flex items-center gap-3">
-            <div className="text-2xl">🍄</div>
+            <div className="w-10 h-10 rounded-full overflow-hidden flex items-center justify-center shadow-glow-sm">
+              <img
+                src="/icon.jpg"
+                alt="Univrs.io"
+                className="w-full h-full object-cover"
+              />
+            </div>
             <div>
-              <h1 className="text-xl font-bold">Mycelial Network</h1>
-              <p className="text-sm text-gray-400">P2P Agent Dashboard</p>
+              <h1 className="text-xl font-display font-bold text-mycelium-white">Mycelial Network</h1>
+              <p className="text-sm text-soft-gray font-body">P2P Agent Dashboard</p>
             </div>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-6">
             <div className="flex items-center gap-2">
               <div
                 className={`w-2 h-2 rounded-full ${
-                  connected ? 'bg-green-500 animate-pulse' : 'bg-red-500'
+                  connected ? 'bg-glow-cyan shadow-glow-sm animate-pulse' : 'bg-red-500'
                 }`}
               />
-              <span className="text-sm text-gray-400">
+              <span className="text-sm font-display text-soft-gray uppercase tracking-wider">
                 {connected ? 'Connected' : 'Disconnected'}
               </span>
             </div>
-            <div className="text-sm text-gray-400">
+            <div className="text-sm font-display text-glow-cyan">
               {peers.size} peer{peers.size !== 1 ? 's' : ''} online
             </div>
           </div>

@@ -6,11 +6,11 @@ interface ReputationCardProps {
 }
 
 const tierConfig = {
-  excellent: { emoji: '⭐', label: 'Excellent', color: 'text-green-400' },
-  good: { emoji: '✅', label: 'Good', color: 'text-lime-400' },
-  neutral: { emoji: '➖', label: 'Neutral', color: 'text-gray-400' },
-  poor: { emoji: '⚠️', label: 'Poor', color: 'text-amber-400' },
-  untrusted: { emoji: '🚫', label: 'Untrusted', color: 'text-red-400' },
+  excellent: { label: 'Excellent', color: 'text-glow-cyan', bgColor: 'bg-glow-cyan' },
+  good: { label: 'Good', color: 'text-glow-gold', bgColor: 'bg-glow-gold' },
+  neutral: { label: 'Neutral', color: 'text-soft-gray', bgColor: 'bg-soft-gray' },
+  poor: { label: 'Poor', color: 'text-amber-400', bgColor: 'bg-amber-400' },
+  untrusted: { label: 'Untrusted', color: 'text-red-400', bgColor: 'bg-red-400' },
 };
 
 // Derive tier from score
@@ -25,7 +25,7 @@ function getTierFromScore(score: number): keyof typeof tierConfig {
 export function ReputationCard({ peer, onClose }: ReputationCardProps) {
   if (!peer) {
     return (
-      <div className="bg-surface rounded-lg p-6 text-center text-gray-500">
+      <div className="bg-forest-floor border border-border-subtle rounded-lg p-6 text-center text-soft-gray font-body italic">
         Select a peer to view details
       </div>
     );
@@ -40,32 +40,35 @@ export function ReputationCard({ peer, onClose }: ReputationCardProps) {
 
     switch (peer.location.type) {
       case 'geographic':
-        return `📍 ${peer.location.latitude?.toFixed(2)}, ${peer.location.longitude?.toFixed(2)}`;
+        return `${peer.location.latitude?.toFixed(2)}, ${peer.location.longitude?.toFixed(2)}`;
       case 'logical':
-        return `🌐 ${peer.location.region}`;
+        return `${peer.location.region}`;
       case 'approximate':
-        return `🏙️ ${peer.location.city || ''} ${peer.location.country_code}`;
+        return `${peer.location.city || ''} ${peer.location.country_code}`;
       default:
         return 'Unknown';
     }
   };
 
   return (
-    <div className="bg-surface rounded-lg overflow-hidden">
-      {/* Header */}
-      <div className="px-6 py-4 bg-surface-light border-b border-gray-800 flex items-center justify-between">
-        <div>
-          <h3 className="text-lg font-semibold text-white">{peer.name}</h3>
-          <p className="text-sm text-gray-400 font-mono">{peer.id.slice(0, 16)}...</p>
+    <div className="bg-forest-floor border border-border-subtle rounded-lg overflow-hidden card-hover">
+      {/* Header with gradient accent */}
+      <div className="relative px-6 py-4 bg-deep-earth border-b border-border-subtle">
+        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-glow-cyan via-glow-gold to-spore-purple" />
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-lg font-display font-semibold text-mycelium-white">{peer.name}</h3>
+            <p className="text-sm text-soft-gray font-mono">{peer.id.slice(0, 16)}...</p>
+          </div>
+          {onClose && (
+            <button
+              onClick={onClose}
+              className="text-soft-gray hover:text-glow-cyan transition-colors"
+            >
+              ✕
+            </button>
+          )}
         </div>
-        {onClose && (
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-white"
-          >
-            ✕
-          </button>
-        )}
       </div>
 
       {/* Content */}
@@ -73,35 +76,36 @@ export function ReputationCard({ peer, onClose }: ReputationCardProps) {
         {/* Reputation Score */}
         <div>
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-gray-400">Reputation</span>
-            <span className={`font-medium ${tier.color}`}>
-              {tier.emoji} {tier.label}
+            <span className="text-sm font-display uppercase tracking-wider text-soft-gray">Reputation</span>
+            <span className={`font-display font-semibold ${tier.color}`}>
+              {tier.label}
             </span>
           </div>
-          <div className="h-3 bg-gray-800 rounded-full overflow-hidden">
+          <div className="h-3 bg-bark rounded-full overflow-hidden">
             <div
-              className="h-full bg-gradient-to-r from-mycelial-600 to-mycelial-400 transition-all duration-500"
+              className="h-full bg-gradient-to-r from-glow-cyan to-glow-gold transition-all duration-500 shadow-glow-sm"
               style={{ width: `${scorePercent}%` }}
             />
           </div>
-          <div className="mt-1 text-right text-sm text-gray-400">
+          <div className="mt-1 text-right text-sm font-display text-glow-cyan">
             {scorePercent}%
           </div>
         </div>
 
         {/* Location */}
-        <div className="flex items-center gap-2 text-gray-400">
+        <div className="flex items-center gap-2 text-soft-gray font-body">
+          <span className="text-spore-purple">Location:</span>
           <span>{formatLocation()}</span>
         </div>
 
         {/* Addresses */}
         {peer.addresses.length > 0 && (
-          <div className="text-sm text-gray-500">
-            <div className="text-gray-400 mb-1">Addresses:</div>
-            <div className="font-mono text-xs break-all">
+          <div className="text-sm">
+            <div className="text-spore-purple font-display text-xs uppercase tracking-wider mb-1">Addresses</div>
+            <div className="font-mono text-xs text-soft-gray break-all">
               {peer.addresses[0]}
               {peer.addresses.length > 1 && (
-                <span className="text-gray-600"> +{peer.addresses.length - 1} more</span>
+                <span className="text-bark"> +{peer.addresses.length - 1} more</span>
               )}
             </div>
           </div>

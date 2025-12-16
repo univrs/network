@@ -9,19 +9,33 @@ interface PeerGraphProps {
   selectedNodeId?: string | null;
 }
 
+// Univrs.io bioluminescent color palette
+const COLORS = {
+  void: '#0a0d0b',
+  deepEarth: '#0f1411',
+  forestFloor: '#141a16',
+  borderSubtle: '#2a3a30',
+  glowCyan: '#00ffd5',
+  glowCyanDim: 'rgba(0, 255, 213, 0.25)',
+  glowGold: '#ffd700',
+  sporePurple: '#b088f9',
+  myceliumWhite: '#e8f4ec',
+  softGray: '#8a9a8f',
+};
+
 export function PeerGraph({ nodes, links, onNodeClick, selectedNodeId }: PeerGraphProps) {
   const graphRef = useRef<ForceGraphMethods>();
 
   // Memoize graph data to prevent re-renders from creating new objects
   const graphDataMemo = useMemo(() => ({ nodes, links }), [nodes, links]);
 
-  // Color scale based on reputation
+  // Color scale based on reputation - univrs.io palette
   const getNodeColor = useCallback((node: GraphNode) => {
-    if (node.isLocal) return '#60a5fa'; // blue for local
+    if (node.isLocal) return COLORS.sporePurple; // purple for local node
     const score = node.reputation;
-    if (score >= 0.9) return '#22c55e'; // green - excellent
-    if (score >= 0.7) return '#84cc16'; // lime - good
-    if (score >= 0.5) return '#a3a3a3'; // gray - neutral
+    if (score >= 0.9) return COLORS.glowCyan; // cyan - excellent
+    if (score >= 0.7) return COLORS.glowGold; // gold - good
+    if (score >= 0.5) return COLORS.softGray; // gray - neutral
     if (score >= 0.3) return '#f59e0b'; // amber - poor
     return '#ef4444'; // red - untrusted
   }, []);
@@ -30,7 +44,7 @@ export function PeerGraph({ nodes, links, onNodeClick, selectedNodeId }: PeerGra
     return node.isLocal ? 12 : 8 + node.reputation * 4;
   }, []);
 
-  // Highlight selected node
+  // Highlight selected node with bioluminescent glow
   const nodeCanvasObject = useCallback(
     (node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
       if (node.x === undefined || node.y === undefined) return;
@@ -42,11 +56,23 @@ export function PeerGraph({ nodes, links, onNodeClick, selectedNodeId }: PeerGra
       const color = getNodeColor(graphNode);
       const isSelected = graphNode.id === selectedNodeId;
 
-      // Draw glow for selected node
+      // Draw outer glow for all nodes (bioluminescent effect)
+      ctx.beginPath();
+      ctx.arc(node.x, node.y, size + 6, 0, 2 * Math.PI);
+      const gradient = ctx.createRadialGradient(node.x, node.y, size, node.x, node.y, size + 6);
+      gradient.addColorStop(0, `${color}40`);
+      gradient.addColorStop(1, 'transparent');
+      ctx.fillStyle = gradient;
+      ctx.fill();
+
+      // Draw stronger glow for selected node
       if (isSelected) {
         ctx.beginPath();
-        ctx.arc(node.x, node.y, size + 4, 0, 2 * Math.PI);
-        ctx.fillStyle = `${color}44`;
+        ctx.arc(node.x, node.y, size + 10, 0, 2 * Math.PI);
+        const selectGradient = ctx.createRadialGradient(node.x, node.y, size, node.x, node.y, size + 10);
+        selectGradient.addColorStop(0, `${color}60`);
+        selectGradient.addColorStop(1, 'transparent');
+        ctx.fillStyle = selectGradient;
         ctx.fill();
       }
 
@@ -57,16 +83,16 @@ export function PeerGraph({ nodes, links, onNodeClick, selectedNodeId }: PeerGra
       ctx.fill();
 
       // Draw border
-      ctx.strokeStyle = isSelected ? '#fff' : '#333';
+      ctx.strokeStyle = isSelected ? COLORS.myceliumWhite : COLORS.borderSubtle;
       ctx.lineWidth = isSelected ? 2 / globalScale : 1 / globalScale;
       ctx.stroke();
 
-      // Draw label
-      ctx.font = `${fontSize}px Inter, sans-serif`;
+      // Draw label with Syne font style
+      ctx.font = `600 ${fontSize}px Syne, sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'top';
-      ctx.fillStyle = '#fff';
-      ctx.fillText(label, node.x, node.y + size + 2);
+      ctx.fillStyle = COLORS.myceliumWhite;
+      ctx.fillText(label, node.x, node.y + size + 4);
     },
     [getNodeColor, getNodeSize, selectedNodeId]
   );
@@ -88,7 +114,7 @@ export function PeerGraph({ nodes, links, onNodeClick, selectedNodeId }: PeerGra
   }, [nodes.length]);
 
   return (
-    <div className="w-full h-full bg-surface rounded-lg overflow-hidden">
+    <div className="w-full h-full bg-forest-floor border border-border-subtle rounded-lg overflow-hidden">
       <ForceGraph2D
         ref={graphRef}
         graphData={graphDataMemo}
@@ -102,10 +128,10 @@ export function PeerGraph({ nodes, links, onNodeClick, selectedNodeId }: PeerGra
           ctx.fillStyle = color;
           ctx.fill();
         }}
-        linkColor={() => '#4b5563'}
-        linkWidth={1}
+        linkColor={() => COLORS.borderSubtle}
+        linkWidth={1.5}
         onNodeClick={handleNodeClick}
-        backgroundColor="#111816"
+        backgroundColor={COLORS.deepEarth}
         cooldownTicks={100}
         d3AlphaDecay={0.02}
         d3VelocityDecay={0.3}
