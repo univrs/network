@@ -1,0 +1,16 @@
+[package]
+name = "mycelial-protocol"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+mycelial-core = { path = "../mycelial-core" }
+serde.workspace = true
+serde_cbor.workspace = true
+ed25519-dalek.workspace = true
+thiserror.workspace = true
+chrono.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util", "macros"] }

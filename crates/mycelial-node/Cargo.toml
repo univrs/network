@@ -1,0 +1,31 @@
+[package]
+name = "mycelial-node"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "mycelial-node"
+path = "src/main.rs"
+
+[dependencies]
+mycelial-core = { path = "../mycelial-core" }
+mycelial-network = { path = "../mycelial-network" }
+mycelial-protocol = { path = "../mycelial-protocol" }
+mycelial-state = { path = "../mycelial-state" }
+tokio.workspace = true
+tokio-tungstenite = "0.24"
+axum = { version = "0.7", features = ["ws"] }
+tower-http = { version = "0.5", features = ["cors"] }
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+clap = { version = "4", features = ["derive"] }
+anyhow.workspace = true
+futures.workspace = true
+chrono.workspace = true
+parking_lot = "0.12"
+uuid = { version = "1", features = ["v4"] }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util", "macros"] }

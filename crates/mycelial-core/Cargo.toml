@@ -1,0 +1,28 @@
+[package]
+name = "mycelial-core"
+version.workspace = true
+edition.workspace = true
+
+[features]
+default = []
+wasm = []
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+serde_cbor.workspace = true
+ed25519-dalek.workspace = true
+rand.workspace = true
+thiserror.workspace = true
+chrono.workspace = true
+uuid.workspace = true
+async-trait.workspace = true
+bs58 = "0.5"
+blake3 = "1.5"
+hex = "0.4"
+sha2 = "0.10"
+multibase = "0.9"
+humantime = "2.1"
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util", "macros"] }
