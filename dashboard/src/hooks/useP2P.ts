@@ -17,7 +17,7 @@ interface P2PState {
 
 // Environment configuration - use same default as orchestrator
 const ENV_WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:9090/api/v1/events';
-const ENV_API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
+const ENV_API_URL = import.meta.env.VITE_API_URL || 'http://localhost:9090';
 
 // Normalize peer data from different backend formats
 function normalizePeer(peer: unknown): NormalizedPeer {
@@ -71,18 +71,15 @@ export function useP2P(options: UseP2POptions = {}) {
     messages: [],
   });
 
-  // Stub: REST endpoints don't exist in orchestrator API
+  // Stub: /api/v1/peers endpoint doesn't exist in orchestrator API
   // Peers are populated via WebSocket events (peers_list, peer_joined, peer_left)
   const fetchPeers = useCallback(() => {
-    // No-op: /api/peers endpoint doesn't exist
-    // Peers will be populated via WebSocket events
-    console.log('P2P: Peers populated via WebSocket events only');
+    console.log('P2P: Peers populated via WebSocket events (REST endpoint not available)');
   }, []);
 
-  // Stub: REST endpoints don't exist in orchestrator API
+  // Stub: /api/v1/node/info endpoint doesn't exist in orchestrator API
+  // Generate a local peer ID for display purposes
   const fetchInfo = useCallback(() => {
-    // No-op: /api/info endpoint doesn't exist
-    // Generate a local peer ID for display purposes
     if (!isMountedRef.current) return;
     const localId = `local-${Date.now().toString(36)}`;
     setState(s => ({ ...s, localPeerId: localId }));
@@ -178,9 +175,8 @@ export function useP2P(options: UseP2POptions = {}) {
         isConnectingRef.current = false;
         reconnectAttemptsRef.current = 0; // Reset on successful connection
         setState(s => ({ ...s, connected: true }));
-        // Initialize local peer ID (REST endpoints don't exist in orchestrator)
+        // Fetch data via REST API (more reliable for initial load)
         fetchInfo();
-        // Peers will be populated via WebSocket events
         fetchPeers();
       };
 
