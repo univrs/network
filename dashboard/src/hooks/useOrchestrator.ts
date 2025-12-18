@@ -11,7 +11,8 @@ interface UseOrchestratorOptions {
 
 // Environment configuration
 const ENV_WS_URL = import.meta.env.VITE_ORCHESTRATOR_WS_URL || import.meta.env.VITE_WS_URL || 'ws://localhost:9090/api/v1/events';
-const ENV_API_URL = import.meta.env.VITE_ORCHESTRATOR_API_URL || import.meta.env.VITE_API_URL || 'http://localhost:8080/api';
+const ENV_API_URL = import.meta.env.VITE_ORCHESTRATOR_API_URL || import.meta.env.VITE_API_URL || 'http://localhost:9090/api';
+const USE_MOCK_DATA = import.meta.env.VITE_USE_MOCK_DATA === 'true' || import.meta.env.VITE_USE_MOCK_DATA === '1';
 
 export function useOrchestrator(options: UseOrchestratorOptions = {}) {
   const apiUrl = options.apiUrl ?? ENV_API_URL;
@@ -155,6 +156,18 @@ export function useOrchestrator(options: UseOrchestratorOptions = {}) {
   // Fetch data from API
   const fetchData = useCallback(async () => {
     if (!isMountedRef.current) return;
+
+    // If mock mode is explicitly enabled, use mock data without error
+    if (USE_MOCK_DATA) {
+      const { mockNodes, mockWorkloads, mockMetrics } = generateMockData();
+      setNodes(mockNodes);
+      setWorkloads(mockWorkloads);
+      setClusterMetrics(mockMetrics);
+      setConnected(true); // Show as "connected" in mock mode
+      setError(null);
+      setLoading(false);
+      return;
+    }
 
     try {
       setLoading(true);
