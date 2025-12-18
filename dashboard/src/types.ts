@@ -200,6 +200,19 @@ export interface ResourcePool {
 export type WorkloadStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
 export type WorkloadPriority = 'low' | 'medium' | 'high' | 'critical';
 
+// Container resource requests from API
+export interface ContainerResourceRequests {
+  cpu_cores?: number;
+  memory_mb?: number;
+  disk_mb?: number;
+}
+
+export interface WorkloadContainer {
+  name: string;
+  image: string;
+  resource_requests?: ContainerResourceRequests;
+}
+
 export interface Workload {
   id: string;
   name: string;
@@ -211,11 +224,15 @@ export interface Workload {
   startedAt?: number;
   completedAt?: number;
   progress: number; // 0-100
-  resourceRequirements: {
+  // Legacy mock format
+  resourceRequirements?: {
     cpu: number;
     memory: number; // bytes
     storage: number; // bytes
   };
+  // Real API format
+  replicas?: number;
+  containers?: WorkloadContainer[];
   metadata?: Record<string, unknown>;
 }
 

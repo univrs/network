@@ -51,6 +51,37 @@ function formatTimeAgo(timestamp: number): string {
   return 'Just now';
 }
 
+// Helper to extract resources from both API and mock formats
+function getWorkloadResources(workload: Workload) {
+  // Try legacy resourceRequirements format first (mock data)
+  if (workload.resourceRequirements) {
+    return {
+      cpu: workload.resourceRequirements.cpu,
+      memory: workload.resourceRequirements.memory,
+      storage: workload.resourceRequirements.storage,
+    };
+  }
+
+  // Try containers[].resource_requests format (real API)
+  if (workload.containers?.length) {
+    const totals = workload.containers.reduce(
+      (acc, container) => {
+        const req = container.resource_requests;
+        return {
+          cpu: acc.cpu + (req?.cpu_cores ?? 0),
+          memory: acc.memory + ((req?.memory_mb ?? 0) * 1024 * 1024), // MB to bytes
+          storage: acc.storage + ((req?.disk_mb ?? 0) * 1024 * 1024), // MB to bytes
+        };
+      },
+      { cpu: 0, memory: 0, storage: 0 }
+    );
+    return totals;
+  }
+
+  // Default fallback
+  return { cpu: 0, memory: 0, storage: 0 };
+}
+
 export function WorkloadList({
   workloads,
   onCancelWorkload,
@@ -217,20 +248,25 @@ export function WorkloadList({
                   </div>
 
                   {/* Resource Requirements */}
-                  <div className="flex items-center gap-3 text-xs">
-                    <div className="text-center">
-                      <div className="text-glow-cyan font-display">{workload.resourceRequirements.cpu}</div>
-                      <div className="text-soft-gray/60">CPU</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-spore-purple font-display">{formatBytes(workload.resourceRequirements.memory)}</div>
-                      <div className="text-soft-gray/60">RAM</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-glow-gold font-display">{formatBytes(workload.resourceRequirements.storage)}</div>
-                      <div className="text-soft-gray/60">Disk</div>
-                    </div>
-                  </div>
+                  {(() => {
+                    const resources = getWorkloadResources(workload);
+                    return (
+                      <div className="flex items-center gap-3 text-xs">
+                        <div className="text-center">
+                          <div className="text-glow-cyan font-display">{resources.cpu || '-'}</div>
+                          <div className="text-soft-gray/60">CPU</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-spore-purple font-display">{resources.memory ? formatBytes(resources.memory) : '-'}</div>
+                          <div className="text-soft-gray/60">RAM</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-glow-gold font-display">{resources.storage ? formatBytes(resources.storage) : '-'}</div>
+                          <div className="text-soft-gray/60">Disk</div>
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   {/* Actions */}
                   <div className="flex items-center gap-2">
