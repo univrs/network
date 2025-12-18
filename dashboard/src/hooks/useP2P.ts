@@ -71,51 +71,22 @@ export function useP2P(options: UseP2POptions = {}) {
     messages: [],
   });
 
-  // Fetch peers via REST API (more reliable than WebSocket for initial load)
-  const fetchPeers = useCallback(async () => {
-    if (!isMountedRef.current) return;
-    try {
-      const url = `${apiUrlRef.current}/api/peers`;
-      console.log('Fetching peers from:', url);
-      const response = await fetch(url);
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-      const peers = await response.json();
-      console.log('REST API returned', peers.length, 'peers');
-
-      if (!isMountedRef.current) return;
-      setState(s => {
-        const newPeers = new Map<string, NormalizedPeer>();
-        for (const peer of peers) {
-          const normalized = normalizePeer(peer);
-          if (normalized.id) {
-            newPeers.set(normalized.id, normalized);
-          }
-        }
-        console.log('Normalized peers:', newPeers.size);
-        return { ...s, peers: newPeers };
-      });
-    } catch (e) {
-      console.error('Failed to fetch peers:', e);
-    }
+  // Stub: REST endpoints don't exist in orchestrator API
+  // Peers are populated via WebSocket events (peers_list, peer_joined, peer_left)
+  const fetchPeers = useCallback(() => {
+    // No-op: /api/peers endpoint doesn't exist
+    // Peers will be populated via WebSocket events
+    console.log('P2P: Peers populated via WebSocket events only');
   }, []);
 
-  // Fetch local peer info
-  const fetchInfo = useCallback(async () => {
+  // Stub: REST endpoints don't exist in orchestrator API
+  const fetchInfo = useCallback(() => {
+    // No-op: /api/info endpoint doesn't exist
+    // Generate a local peer ID for display purposes
     if (!isMountedRef.current) return;
-    try {
-      const response = await fetch(`${apiUrlRef.current}/api/info`);
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-      const info = await response.json();
-      console.log('Local node info:', info);
-      if (!isMountedRef.current) return;
-      setState(s => ({ ...s, localPeerId: info.peer_id }));
-    } catch (e) {
-      console.error('Failed to fetch info:', e);
-    }
+    const localId = `local-${Date.now().toString(36)}`;
+    setState(s => ({ ...s, localPeerId: localId }));
+    console.log('P2P: Generated local peer ID:', localId);
   }, []);
 
   // Handle incoming WebSocket messages
@@ -207,8 +178,9 @@ export function useP2P(options: UseP2POptions = {}) {
         isConnectingRef.current = false;
         reconnectAttemptsRef.current = 0; // Reset on successful connection
         setState(s => ({ ...s, connected: true }));
-        // Fetch data via REST (more reliable)
+        // Initialize local peer ID (REST endpoints don't exist in orchestrator)
         fetchInfo();
+        // Peers will be populated via WebSocket events
         fetchPeers();
       };
 
