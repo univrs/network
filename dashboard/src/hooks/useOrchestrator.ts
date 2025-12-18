@@ -9,9 +9,10 @@ interface UseOrchestratorOptions {
   pollInterval?: number;
 }
 
-// Environment configuration
-const ENV_WS_URL = import.meta.env.VITE_ORCHESTRATOR_WS_URL || import.meta.env.VITE_WS_URL || 'ws://localhost:9090/api/v1/events';
-const ENV_API_URL = import.meta.env.VITE_ORCHESTRATOR_API_URL || import.meta.env.VITE_API_URL || 'http://localhost:9090';
+// Environment configuration - Orchestrator runs on port 9090
+// Note: P2P node is separate at port 8080, handled by useP2P hook
+const ENV_WS_URL = import.meta.env.VITE_ORCHESTRATOR_WS_URL || 'ws://localhost:9090/api/v1/events';
+const ENV_API_URL = import.meta.env.VITE_ORCHESTRATOR_API_URL || 'http://localhost:9090';
 const USE_MOCK_DATA = import.meta.env.VITE_USE_MOCK_DATA === 'true' || import.meta.env.VITE_USE_MOCK_DATA === '1';
 
 export function useOrchestrator(options: UseOrchestratorOptions = {}) {

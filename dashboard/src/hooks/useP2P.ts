@@ -15,9 +15,10 @@ interface P2PState {
   messages: ChatMessage[];
 }
 
-// Environment configuration - use same default as orchestrator
-const ENV_WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:9090/api/v1/events';
-const ENV_API_URL = import.meta.env.VITE_API_URL || 'http://localhost:9090';
+// Environment configuration - P2P node runs on port 8080
+// Note: Orchestrator is separate at port 9090, handled by useOrchestrator hook
+const ENV_WS_URL = import.meta.env.VITE_P2P_WS_URL || 'ws://localhost:8080/ws';
+const ENV_API_URL = import.meta.env.VITE_P2P_API_URL || 'http://localhost:8080';
 
 // Normalize peer data from different backend formats
 function normalizePeer(peer: unknown): NormalizedPeer {
@@ -71,19 +72,50 @@ export function useP2P(options: UseP2POptions = {}) {
     messages: [],
   });
 
-  // Stub: /api/v1/peers endpoint doesn't exist in orchestrator API
-  // Peers are populated via WebSocket events (peers_list, peer_joined, peer_left)
-  const fetchPeers = useCallback(() => {
-    console.log('P2P: Peers populated via WebSocket events (REST endpoint not available)');
+  // Fetch peers from P2P node REST API
+  const fetchPeers = useCallback(async () => {
+    if (!isMountedRef.current) return;
+    try {
+      const response = await fetch(`${apiUrlRef.current}/api/peers`);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data = await response.json();
+      const peers = data.peers || data || [];
+      setState(s => {
+        const newPeers = new Map(s.peers);
+        for (const peer of peers) {
+          const normalized = normalizePeer(peer);
+          if (normalized.id) {
+            newPeers.set(normalized.id, normalized);
+          }
+        }
+        return { ...s, peers: newPeers };
+      });
+      console.log('P2P: Fetched peers via REST:', peers.length);
+    } catch (err) {
+      console.warn('P2P: Failed to fetch peers via REST:', err);
+      // Peers will be populated via WebSocket events as fallback
+    }
   }, []);
 
-  // Stub: /api/v1/node/info endpoint doesn't exist in orchestrator API
-  // Generate a local peer ID for display purposes
-  const fetchInfo = useCallback(() => {
+  // Fetch local node info from P2P node REST API
+  const fetchInfo = useCallback(async () => {
     if (!isMountedRef.current) return;
-    const localId = `local-${Date.now().toString(36)}`;
-    setState(s => ({ ...s, localPeerId: localId }));
-    console.log('P2P: Generated local peer ID:', localId);
+    try {
+      const response = await fetch(`${apiUrlRef.current}/api/info`);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data = await response.json();
+      const peerId = data.peer_id || data.peerId || data.id;
+      if (peerId) {
+        setState(s => ({ ...s, localPeerId: peerId }));
+        console.log('P2P: Got local peer ID:', peerId);
+      }
+    } catch (err) {
+      console.warn('P2P: Failed to fetch node info via REST:', err);
+      // Generate fallback local ID
+      const localId = `local-${Date.now().toString(36)}`;
+      setState(s => ({ ...s, localPeerId: localId }));
+      console.log('P2P: Generated fallback peer ID:', localId);
+    }
   }, []);
 
   // Handle incoming WebSocket messages
