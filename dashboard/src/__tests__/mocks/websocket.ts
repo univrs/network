@@ -266,11 +266,11 @@ export const mockWebSocketServer = {
       description: proposal.description,
       proposal_type: proposal.proposal_type || 'text',
       status: 'active',
-      votesFor: 0,
-      votesAgainst: 0,
-      quorum: 0.5,
-      expiresAt: Date.now() + 86400000,
-      createdAt: Date.now(),
+      yes_votes: 0,
+      no_votes: 0,
+      quorum: 5,
+      deadline: Date.now() + 86400000,
+      timestamp: Date.now(),
     });
   },
 };
