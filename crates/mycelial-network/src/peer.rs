@@ -171,6 +171,11 @@ impl PeerManager {
         });
     }
 
+    /// Get peer connection state
+    pub fn get_state(&self, peer_id: &PeerId) -> Option<ConnectionState> {
+        self.peers.read().get(peer_id).map(|info| info.state)
+    }
+
     /// Add an address for a peer
     pub fn add_address(&self, peer_id: PeerId, addr: Multiaddr) {
         self.update(peer_id, |info| {

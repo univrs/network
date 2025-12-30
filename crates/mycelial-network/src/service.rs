@@ -225,9 +225,11 @@ impl NetworkService {
         // Create publish callback that uses the command channel
         let publish_tx = command_tx.clone();
         let publish_fn = move |topic: String, data: Vec<u8>| {
-            // Use blocking send since we're in a sync context
+            // Use try_send which is non-blocking and works in any context
+            // This may fail if the channel is full, but that's acceptable
+            // for gossip messages which can be retried
             publish_tx
-                .blocking_send(NetworkCommand::Publish { topic, data })
+                .try_send(NetworkCommand::Publish { topic, data })
                 .map_err(|e| e.to_string())
         };
 
@@ -437,8 +439,24 @@ impl NetworkService {
 
             SwarmEvent::OutgoingConnectionError { peer_id, error, .. } => {
                 if let Some(peer_id) = peer_id {
-                    warn!("Dial error for {}: {:?}", peer_id, error);
-                    self.peer_manager.set_state(peer_id, ConnectionState::Failed);
+                    // Only mark as failed if not already connected or connecting
+                    // Dial errors for secondary addresses shouldn't affect existing connections,
+                    // and dial errors during connection setup shouldn't override Connecting state
+                    let current_state = self.peer_manager.get_state(&peer_id);
+                    match current_state {
+                        Some(ConnectionState::Connected) | Some(ConnectionState::Connecting) => {
+                            debug!("Ignoring dial error for peer {} (state: {:?})", peer_id, current_state);
+                        }
+                        _ => {
+                            // Check if we're actually connected to this peer via the swarm
+                            if self.swarm.is_connected(&peer_id) {
+                                debug!("Ignoring dial error for swarm-connected peer {}", peer_id);
+                            } else {
+                                warn!("Dial error for {}: {:?}", peer_id, error);
+                                self.peer_manager.set_state(peer_id, ConnectionState::Failed);
+                            }
+                        }
+                    }
                 }
 
                 let _ = self.event_tx.send(NetworkEvent::DialFailed {
@@ -549,9 +567,14 @@ impl NetworkService {
                     info.protocols.iter().map(|p| p.to_string()).collect(),
                 );
 
-                // Add addresses to Kademlia
+                // Add addresses to Kademlia (filter to only routable addresses)
+                // This avoids adding unreachable Docker/WSL addresses in test environments
                 for addr in &info.listen_addrs {
-                    self.swarm.behaviour_mut().add_address(&peer_id, addr.clone());
+                    if is_routable_address(addr) {
+                        self.swarm.behaviour_mut().add_address(&peer_id, addr.clone());
+                    } else {
+                        debug!("Skipping non-routable address for {}: {}", peer_id, addr);
+                    }
                 }
 
                 let _ = self.event_tx.send(NetworkEvent::PeerIdentified {
@@ -708,4 +731,49 @@ impl NetworkService {
 
         true
     }
+}
+
+/// Check if a multiaddr is routable/usable
+///
+/// Filters out:
+/// - 10.255.255.254 (WSL magic IP)
+/// - 172.17.x.x (Docker bridge)
+/// - 172.28.x.x, 172.29.x.x (WSL internal bridges)
+///
+/// Allows:
+/// - 127.0.0.1 (localhost)
+/// - Public IPs
+/// - Standard private ranges used intentionally (192.168.x.x, 10.x.x.x except 10.255.255.254)
+fn is_routable_address(addr: &Multiaddr) -> bool {
+    use std::net::Ipv4Addr;
+
+    for protocol in addr.iter() {
+        if let libp2p::multiaddr::Protocol::Ip4(ip) = protocol {
+            // Always allow localhost
+            if ip == Ipv4Addr::new(127, 0, 0, 1) {
+                return true;
+            }
+
+            // Block WSL magic IP
+            if ip == Ipv4Addr::new(10, 255, 255, 254) {
+                return false;
+            }
+
+            // Block Docker bridge (172.17.x.x)
+            if ip.octets()[0] == 172 && ip.octets()[1] == 17 {
+                return false;
+            }
+
+            // Block WSL internal bridges (172.28.x.x, 172.29.x.x)
+            if ip.octets()[0] == 172 && (ip.octets()[1] == 28 || ip.octets()[1] == 29) {
+                return false;
+            }
+
+            // Allow other addresses (public IPs, 192.168.x.x, 10.x.x.x)
+            return true;
+        }
+    }
+
+    // Allow non-IPv4 addresses (IPv6, QUIC, etc.)
+    true
 }
