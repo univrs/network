@@ -18,10 +18,12 @@ use tracing::{debug, info, warn};
 
 use crate::behaviour::{MycelialBehaviour, MycelialBehaviourEvent};
 use crate::config::NetworkConfig;
+use crate::enr_bridge::{EnrBridge, CREDIT_TOPIC, GRADIENT_TOPIC};
 use crate::error::{NetworkError, Result};
 use crate::event::{NetworkEvent, NetworkStats};
 use crate::peer::{ConnectionState, PeerManager};
 use crate::transport::{self, TransportConfig};
+use univrs_enr::core::NodeId;
 
 /// Commands sent to the network service
 #[derive(Debug)]
@@ -171,6 +173,8 @@ pub struct NetworkService {
     start_time: Instant,
     /// Running flag
     running: bool,
+    /// ENR bridge for economic primitives
+    enr_bridge: Arc<EnrBridge>,
 }
 
 impl NetworkService {
@@ -210,6 +214,25 @@ impl NetworkService {
             local_peer_id,
         };
 
+        // Create ENR bridge with publish callback
+        // Convert PeerId to NodeId (use peer_id bytes, padded/truncated to 32)
+        let peer_id_bytes = local_peer_id.to_bytes();
+        let mut node_id_bytes = [0u8; 32];
+        let len = peer_id_bytes.len().min(32);
+        node_id_bytes[..len].copy_from_slice(&peer_id_bytes[..len]);
+        let local_node_id = NodeId::from_bytes(node_id_bytes);
+
+        // Create publish callback that uses the command channel
+        let publish_tx = command_tx.clone();
+        let publish_fn = move |topic: String, data: Vec<u8>| {
+            // Use blocking send since we're in a sync context
+            publish_tx
+                .blocking_send(NetworkCommand::Publish { topic, data })
+                .map_err(|e| e.to_string())
+        };
+
+        let enr_bridge = Arc::new(EnrBridge::new(local_node_id, publish_fn));
+
         let service = Self {
             swarm,
             config,
@@ -221,6 +244,7 @@ impl NetworkService {
             stats: Arc::new(RwLock::new(NetworkStats::default())),
             start_time: Instant::now(),
             running: false,
+            enr_bridge,
         };
 
         Ok((service, handle, event_rx))
@@ -229,6 +253,11 @@ impl NetworkService {
     /// Get a reference to the peer manager
     pub fn peer_manager(&self) -> &Arc<PeerManager> {
         &self.peer_manager
+    }
+
+    /// Get a reference to the ENR bridge for economic operations
+    pub fn enr_bridge(&self) -> &Arc<EnrBridge> {
+        &self.enr_bridge
     }
 
     /// Start the network service
@@ -264,6 +293,9 @@ impl NetworkService {
             "/mycelial/1.0.0/credit",     // Mutual credit transactions
             "/mycelial/1.0.0/governance", // Proposals and voting
             "/mycelial/1.0.0/resource",   // Resource sharing metrics
+            // ENR bridge topics (gradient and credits)
+            GRADIENT_TOPIC,               // Resource gradient broadcasts
+            CREDIT_TOPIC,                 // Credit transfers
         ];
         for topic_str in topics {
             let topic = libp2p::gossipsub::IdentTopic::new(topic_str);
@@ -433,9 +465,10 @@ impl NetworkService {
                 message_id,
                 message,
             }) => {
+                let topic_str = message.topic.to_string();
                 debug!(
                     "Received message on topic {} from {:?}",
-                    message.topic, message.source
+                    topic_str, message.source
                 );
 
                 {
@@ -444,9 +477,20 @@ impl NetworkService {
                     stats.bytes_received += message.data.len() as u64;
                 }
 
+                // Route ENR messages to the bridge handler
+                if topic_str == GRADIENT_TOPIC || topic_str == CREDIT_TOPIC {
+                    let bridge = self.enr_bridge.clone();
+                    let data = message.data.clone();
+                    tokio::spawn(async move {
+                        if let Err(e) = bridge.handle_message(&data).await {
+                            warn!("Failed to handle ENR message: {}", e);
+                        }
+                    });
+                }
+
                 let _ = self.event_tx.send(NetworkEvent::MessageReceived {
                     message_id,
-                    topic: message.topic.to_string(),
+                    topic: topic_str,
                     source: message.source,
                     data: message.data,
                     timestamp: chrono::Utc::now(),

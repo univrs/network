@@ -58,6 +58,10 @@ pub mod peer;
 pub mod service;
 pub mod transport;
 
+// Adding enr
+pub mod enr_bridge;
+
+
 // Re-exports
 pub use behaviour::{MycelialBehaviour, MycelialBehaviourEvent, topics};
 pub use config::NetworkConfig;
