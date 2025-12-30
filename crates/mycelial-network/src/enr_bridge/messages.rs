@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use univrs_enr::{
     core::{Credits, CreditTransfer, NodeId, Timestamp},
     nexus::{NexusCandidate, ResourceGradient},
+    septal::SeptalGateState,
 };
 
 /// Gossipsub topic for gradient updates
@@ -17,6 +18,9 @@ pub const CREDIT_TOPIC: &str = "/vudo/enr/credits/1.0.0";
 
 /// Gossipsub topic for nexus election
 pub const ELECTION_TOPIC: &str = "/vudo/enr/election/1.0.0";
+
+/// Gossipsub topic for septal gate (circuit breaker) messages
+pub const SEPTAL_TOPIC: &str = "/vudo/enr/septal/1.0.0";
 
 /// Envelope for all ENR messages over gossip
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -31,6 +35,8 @@ pub enum EnrMessage {
     BalanceResponse(BalanceResponseMsg),
     /// Nexus election message
     Election(ElectionMessage),
+    /// Septal gate (circuit breaker) message
+    Septal(SeptalMessage),
 }
 
 /// Gradient update broadcast by a node
@@ -142,6 +148,58 @@ pub struct ElectionResult {
     pub timestamp: Timestamp,
 }
 
+/// Septal gate message variants
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum SeptalMessage {
+    /// Gate state change announcement
+    StateChange(SeptalStateMsg),
+    /// Health probe request
+    HealthProbe(SeptalHealthProbe),
+    /// Health probe response
+    HealthResponse(SeptalHealthResponse),
+}
+
+/// Septal gate state change message
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SeptalStateMsg {
+    /// Node whose gate changed
+    pub node: NodeId,
+    /// Previous state
+    pub from_state: SeptalGateState,
+    /// New state
+    pub to_state: SeptalGateState,
+    /// Reason for the transition
+    pub reason: String,
+    /// When the transition occurred
+    pub timestamp: Timestamp,
+}
+
+/// Health probe request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SeptalHealthProbe {
+    /// Unique request ID
+    pub request_id: u64,
+    /// Target node to probe
+    pub target: NodeId,
+    /// When the probe was sent
+    pub timestamp: Timestamp,
+}
+
+/// Health probe response
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SeptalHealthResponse {
+    /// Correlates to probe request_id
+    pub request_id: u64,
+    /// Responding node
+    pub node: NodeId,
+    /// Whether the node considers itself healthy
+    pub is_healthy: bool,
+    /// Current failure count
+    pub failure_count: u32,
+    /// When the response was sent
+    pub timestamp: Timestamp,
+}
+
 impl EnrMessage {
     /// Serialize message to CBOR bytes
     pub fn encode(&self) -> Result<Vec<u8>, EncodeError> {
@@ -161,6 +219,7 @@ impl EnrMessage {
             | EnrMessage::BalanceQuery(_)
             | EnrMessage::BalanceResponse(_) => CREDIT_TOPIC,
             EnrMessage::Election(_) => ELECTION_TOPIC,
+            EnrMessage::Septal(_) => SEPTAL_TOPIC,
         }
     }
 }

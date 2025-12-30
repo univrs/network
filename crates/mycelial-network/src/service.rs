@@ -18,7 +18,7 @@ use tracing::{debug, info, warn};
 
 use crate::behaviour::{MycelialBehaviour, MycelialBehaviourEvent};
 use crate::config::NetworkConfig;
-use crate::enr_bridge::{EnrBridge, CREDIT_TOPIC, ELECTION_TOPIC, GRADIENT_TOPIC};
+use crate::enr_bridge::{EnrBridge, CREDIT_TOPIC, ELECTION_TOPIC, GRADIENT_TOPIC, SEPTAL_TOPIC};
 use crate::error::{NetworkError, Result};
 use crate::event::{NetworkEvent, NetworkStats};
 use crate::peer::{ConnectionState, PeerManager};
@@ -293,10 +293,11 @@ impl NetworkService {
             "/mycelial/1.0.0/credit",     // Mutual credit transactions
             "/mycelial/1.0.0/governance", // Proposals and voting
             "/mycelial/1.0.0/resource",   // Resource sharing metrics
-            // ENR bridge topics (gradient, credits, election)
+            // ENR bridge topics (gradient, credits, election, septal)
             GRADIENT_TOPIC,               // Resource gradient broadcasts
             CREDIT_TOPIC,                 // Credit transfers
             ELECTION_TOPIC,               // Nexus election
+            SEPTAL_TOPIC,                 // Septal gate (circuit breaker)
         ];
         for topic_str in topics {
             let topic = libp2p::gossipsub::IdentTopic::new(topic_str);
@@ -482,6 +483,7 @@ impl NetworkService {
                 if topic_str == GRADIENT_TOPIC
                     || topic_str == CREDIT_TOPIC
                     || topic_str == ELECTION_TOPIC
+                    || topic_str == SEPTAL_TOPIC
                 {
                     let bridge = self.enr_bridge.clone();
                     let data = message.data.clone();
