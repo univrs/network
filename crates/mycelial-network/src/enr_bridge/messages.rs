@@ -6,7 +6,7 @@
 use serde::{Deserialize, Serialize};
 use univrs_enr::{
     core::{Credits, CreditTransfer, NodeId, Timestamp},
-    nexus::ResourceGradient,
+    nexus::{NexusCandidate, ResourceGradient},
 };
 
 /// Gossipsub topic for gradient updates
@@ -14,6 +14,9 @@ pub const GRADIENT_TOPIC: &str = "/vudo/enr/gradient/1.0.0";
 
 /// Gossipsub topic for credit operations
 pub const CREDIT_TOPIC: &str = "/vudo/enr/credits/1.0.0";
+
+/// Gossipsub topic for nexus election
+pub const ELECTION_TOPIC: &str = "/vudo/enr/election/1.0.0";
 
 /// Envelope for all ENR messages over gossip
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -26,6 +29,8 @@ pub enum EnrMessage {
     BalanceQuery(BalanceQueryMsg),
     /// Balance query response
     BalanceResponse(BalanceResponseMsg),
+    /// Nexus election message
+    Election(ElectionMessage),
 }
 
 /// Gradient update broadcast by a node
@@ -74,6 +79,69 @@ pub struct BalanceResponseMsg {
     pub as_of: Timestamp,
 }
 
+/// Election message variants
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum ElectionMessage {
+    /// Election announcement (starts election)
+    Announcement(ElectionAnnouncement),
+    /// Candidacy submission
+    Candidacy(NexusCandidacy),
+    /// Vote for a candidate
+    Vote(ElectionVote),
+    /// Election result announcement
+    Result(ElectionResult),
+}
+
+/// Election announcement - initiates a new election
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ElectionAnnouncement {
+    /// Unique election identifier
+    pub election_id: u64,
+    /// Node initiating the election
+    pub initiator: NodeId,
+    /// Region ID being elected
+    pub region_id: String,
+    /// When the election was initiated
+    pub timestamp: Timestamp,
+}
+
+/// Candidacy submission for nexus election
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NexusCandidacy {
+    /// Election this candidacy is for
+    pub election_id: u64,
+    /// Candidate details with metrics
+    pub candidate: NexusCandidate,
+}
+
+/// Vote in a nexus election
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ElectionVote {
+    /// Election this vote is for
+    pub election_id: u64,
+    /// Node casting the vote
+    pub voter: NodeId,
+    /// Candidate being voted for
+    pub candidate: NodeId,
+    /// When the vote was cast
+    pub timestamp: Timestamp,
+}
+
+/// Election result announcement
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ElectionResult {
+    /// Election this result is for
+    pub election_id: u64,
+    /// Winning node
+    pub winner: NodeId,
+    /// Region that was elected
+    pub region_id: String,
+    /// Total votes cast
+    pub vote_count: u32,
+    /// When the result was finalized
+    pub timestamp: Timestamp,
+}
+
 impl EnrMessage {
     /// Serialize message to CBOR bytes
     pub fn encode(&self) -> Result<Vec<u8>, EncodeError> {
@@ -89,9 +157,10 @@ impl EnrMessage {
     pub fn topic(&self) -> &'static str {
         match self {
             EnrMessage::GradientUpdate(_) => GRADIENT_TOPIC,
-            EnrMessage::CreditTransfer(_) |
-            EnrMessage::BalanceQuery(_) |
-            EnrMessage::BalanceResponse(_) => CREDIT_TOPIC,
+            EnrMessage::CreditTransfer(_)
+            | EnrMessage::BalanceQuery(_)
+            | EnrMessage::BalanceResponse(_) => CREDIT_TOPIC,
+            EnrMessage::Election(_) => ELECTION_TOPIC,
         }
     }
 }
