@@ -35,9 +35,9 @@ async fn test_credit_transfer_with_tax() {
         .await
         .expect("Failed to spawn cluster");
 
-    // Wait for mesh formation
+    // Wait for mesh formation (min 1 peer for star topology)
     cluster
-        .wait_for_mesh(2, 10)
+        .wait_for_mesh(1, 10)
         .await
         .expect("Mesh formation timeout");
 
@@ -231,7 +231,7 @@ async fn test_multiple_transfers() {
         .expect("Failed to spawn cluster");
 
     cluster
-        .wait_for_mesh(2, 10)
+        .wait_for_mesh(1, 10)
         .await
         .expect("Mesh formation timeout");
 

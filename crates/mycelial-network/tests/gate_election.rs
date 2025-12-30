@@ -35,9 +35,9 @@ async fn test_election_announcement_propagates() {
         .await
         .expect("Failed to spawn cluster");
 
-    // Wait for mesh formation
+    // Wait for mesh formation (min 1 peer per node for star topology)
     cluster
-        .wait_for_mesh(3, 15)
+        .wait_for_mesh(1, 15)
         .await
         .expect("Mesh formation timeout");
 
@@ -125,7 +125,7 @@ async fn test_election_completes_with_winner() {
         .expect("Failed to spawn cluster");
 
     cluster
-        .wait_for_mesh(2, 10)
+        .wait_for_mesh(1, 10)
         .await
         .expect("Mesh formation timeout");
 
@@ -212,7 +212,7 @@ async fn test_ineligible_node_cannot_win() {
         .expect("Failed to spawn cluster");
 
     cluster
-        .wait_for_mesh(2, 10)
+        .wait_for_mesh(1, 10)
         .await
         .expect("Mesh formation timeout");
 

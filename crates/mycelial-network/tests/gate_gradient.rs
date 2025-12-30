@@ -34,9 +34,11 @@ async fn test_gradient_propagates_to_all_nodes() {
         .await
         .expect("Failed to spawn cluster");
 
-    // Wait for mesh formation (each node should see at least 2 peers)
+    // Wait for mesh formation (each node should see at least 1 peer)
+    // Note: Bootstrap creates a star topology where nodes 1,2 connect to node 0
+    // so min_peers=1 is sufficient for gossipsub to function
     cluster
-        .wait_for_mesh(2, 10)
+        .wait_for_mesh(1, 10)
         .await
         .expect("Mesh formation timeout");
 
@@ -130,9 +132,9 @@ async fn test_gradient_propagates_5_nodes() {
         .await
         .expect("Failed to spawn cluster");
 
-    // Wait for mesh (each node should see at least 3 peers in a 5-node cluster)
+    // Wait for mesh (min 1 peer for star bootstrap topology)
     cluster
-        .wait_for_mesh(3, 15)
+        .wait_for_mesh(1, 15)
         .await
         .expect("Mesh formation timeout");
 
