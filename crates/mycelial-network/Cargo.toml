@@ -4,6 +4,8 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+univrs-enr = { workspace = true }
+serde_cbor = "0.11"
 mycelial-core = { path = "../mycelial-core" }
 mycelial-protocol = { path = "../mycelial-protocol" }
 libp2p = { workspace = true, features = ["mdns"] }
@@ -24,3 +26,5 @@ sha2 = "0.10"
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util", "macros", "rt-multi-thread"] }
 tracing-subscriber.workspace = true
+univrs-enr = { workspace = true }
+serde_cbor = "0.11"
