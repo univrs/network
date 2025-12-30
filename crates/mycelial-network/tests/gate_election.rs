@@ -44,10 +44,10 @@ async fn test_election_announcement_propagates() {
     // Set metrics on all nodes to make them eligible
     for i in 0..cluster.node_count() {
         let metrics = LocalNodeMetrics {
-            uptime_ratio: 0.98,
-            bandwidth_mbps: 100.0,
-            reputation_score: 0.9,
-            connected_peers: cluster.node_count() - 1,
+            uptime: 0.98,
+            bandwidth: 100,
+            reputation: 0.9,
+            connection_count: (cluster.node_count() - 1) as u32,
         };
         cluster.node(i).enr_bridge.election.update_metrics(metrics).await;
     }
@@ -131,22 +131,22 @@ async fn test_election_completes_with_winner() {
 
     // Set high metrics on node 1 to make it the best candidate
     let high_metrics = LocalNodeMetrics {
-        uptime_ratio: 0.99,
-        bandwidth_mbps: 500.0,
-        reputation_score: 0.95,
-        connected_peers: 2,
+        uptime: 0.99,
+        bandwidth: 500,
+        reputation: 0.95,
+        connection_count: 2,
     };
     cluster.node(1).enr_bridge.election.update_metrics(high_metrics).await;
 
     // Set lower metrics on other nodes
-    let low_metrics = LocalNodeMetrics {
-        uptime_ratio: 0.95,
-        bandwidth_mbps: 50.0,
-        reputation_score: 0.8,
-        connected_peers: 2,
-    };
     for i in [0, 2] {
-        cluster.node(i).enr_bridge.election.update_metrics(low_metrics.clone()).await;
+        let low_metrics = LocalNodeMetrics {
+            uptime: 0.95,
+            bandwidth: 50,
+            reputation: 0.8,
+            connection_count: 2,
+        };
+        cluster.node(i).enr_bridge.election.update_metrics(low_metrics).await;
     }
 
     // Trigger election from node 0
@@ -218,19 +218,19 @@ async fn test_ineligible_node_cannot_win() {
 
     // Set node 0 as ineligible (low uptime)
     let ineligible_metrics = LocalNodeMetrics {
-        uptime_ratio: 0.80, // Below 0.95 threshold
-        bandwidth_mbps: 100.0,
-        reputation_score: 0.9,
-        connected_peers: 2,
+        uptime: 0.80, // Below 0.95 threshold
+        bandwidth: 100,
+        reputation: 0.9,
+        connection_count: 2,
     };
     cluster.node(0).enr_bridge.election.update_metrics(ineligible_metrics).await;
 
     // Set node 1 as eligible
     let eligible_metrics = LocalNodeMetrics {
-        uptime_ratio: 0.98,
-        bandwidth_mbps: 100.0,
-        reputation_score: 0.9,
-        connected_peers: 2,
+        uptime: 0.98,
+        bandwidth: 100,
+        reputation: 0.9,
+        connection_count: 2,
     };
     cluster.node(1).enr_bridge.election.update_metrics(eligible_metrics).await;
 
