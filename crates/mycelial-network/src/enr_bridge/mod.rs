@@ -6,17 +6,18 @@
 //! - **Gradient Broadcasting**: Propagate resource availability via gossip
 //! - **Credit Synchronization**: Transfer credits between nodes
 //! - **Nexus Election**: Distributed election for hub nodes
+//! - **Septal Gates**: Circuit breakers for isolating unhealthy nodes
 //!
 //! ## MVP Scope (Phase 0)
 //!
 //! - Local ledger with optimistic updates
 //! - Gossipsub broadcast for transfers
 //! - Distributed nexus election
+//! - Septal gates (circuit breakers)
 //!
 //! ## Future Additions (Phase 3+)
 //!
 //! - OpenRaft consensus for ledger
-//! - Septal gates (circuit breakers)
 //!
 //! ## Example
 //!
@@ -48,11 +49,13 @@ pub mod credits;
 pub mod gradient;
 pub mod messages;
 pub mod nexus;
+pub mod septal;
 
 pub use credits::{CreditSynchronizer, TransferError, INITIAL_NODE_CREDITS};
 pub use gradient::{BroadcastError, GradientBroadcaster, MAX_GRADIENT_AGE_MS};
-pub use messages::{EnrMessage, CREDIT_TOPIC, ELECTION_TOPIC, GRADIENT_TOPIC};
+pub use messages::{EnrMessage, CREDIT_TOPIC, ELECTION_TOPIC, GRADIENT_TOPIC, SEPTAL_TOPIC};
 pub use nexus::{DistributedElection, ElectionError, LocalNodeMetrics};
+pub use septal::{SeptalError, SeptalGateManager, SeptalStats};
 
 use tracing::{debug, error, warn};
 use univrs_enr::{
@@ -63,7 +66,8 @@ use univrs_enr::{
 /// Unified ENR Bridge coordinator
 ///
 /// Ties together gradient broadcasting, credit synchronization,
-/// and nexus election, routing incoming messages to the appropriate handler.
+/// nexus election, and septal gates, routing incoming messages
+/// to the appropriate handler.
 pub struct EnrBridge {
     /// Gradient state and broadcasting
     pub gradient: GradientBroadcaster,
@@ -71,6 +75,8 @@ pub struct EnrBridge {
     pub credits: CreditSynchronizer,
     /// Nexus election manager
     pub election: DistributedElection,
+    /// Septal gate (circuit breaker) manager
+    pub septal: SeptalGateManager,
 }
 
 impl EnrBridge {
@@ -96,7 +102,8 @@ impl EnrBridge {
         Self {
             gradient: GradientBroadcaster::new(local_node, publish_fn.clone()),
             credits: CreditSynchronizer::new(local_node, publish_fn.clone()),
-            election: DistributedElection::new(local_node, publish_fn),
+            election: DistributedElection::new(local_node, publish_fn.clone()),
+            septal: SeptalGateManager::new(local_node, publish_fn),
         }
     }
 
@@ -137,6 +144,11 @@ impl EnrBridge {
                     warn!("Election message rejected: {}", e);
                 }
             }
+            EnrMessage::Septal(septal_msg) => {
+                if let Err(e) = self.septal.handle_message(septal_msg).await {
+                    warn!("Septal message rejected: {}", e);
+                }
+            }
         }
 
         Ok(())
@@ -168,7 +180,7 @@ impl EnrBridge {
         self.gradient.active_node_count().await
     }
 
-    /// Perform maintenance (prune stale data)
+    /// Perform maintenance (prune stale data, attempt recoveries)
     pub async fn maintenance(&self) {
         let pruned = self.gradient.prune_stale().await;
         if pruned > 0 {
@@ -178,6 +190,12 @@ impl EnrBridge {
         // Check election progress
         if let Err(e) = self.election.check_election_progress().await {
             debug!("Election progress check: {}", e);
+        }
+
+        // Attempt recovery for isolated nodes
+        let recoveries = self.septal.attempt_recoveries().await;
+        if !recoveries.is_empty() {
+            debug!(count = recoveries.len(), "Septal recovery attempts");
         }
     }
 
@@ -205,6 +223,45 @@ impl EnrBridge {
     pub async fn election_in_progress(&self) -> bool {
         self.election.election_in_progress().await
     }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Septal Gate (Circuit Breaker) Methods
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    /// Record a failure for a peer (may trigger gate closure)
+    pub async fn record_peer_failure(&self, peer: NodeId, reason: &str) {
+        self.septal.record_failure(peer, reason).await;
+    }
+
+    /// Record a success for a peer (resets failure count)
+    pub async fn record_peer_success(&self, peer: NodeId) {
+        self.septal.record_success(peer).await;
+    }
+
+    /// Check if traffic is allowed to/from a peer
+    pub async fn allows_traffic(&self, peer: &NodeId) -> bool {
+        self.septal.allows_traffic(peer).await
+    }
+
+    /// Check if a peer is isolated
+    pub async fn is_peer_isolated(&self, peer: &NodeId) -> bool {
+        self.septal.is_isolated(peer).await
+    }
+
+    /// Check if a transaction should be blocked
+    pub async fn should_block_transaction(&self, from: &NodeId, to: &NodeId) -> bool {
+        self.septal.should_block_transaction(from, to).await
+    }
+
+    /// Get all isolated nodes
+    pub async fn isolated_nodes(&self) -> Vec<NodeId> {
+        self.septal.isolated_nodes().await
+    }
+
+    /// Get septal gate statistics
+    pub async fn septal_stats(&self) -> SeptalStats {
+        self.septal.stats().await
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -215,7 +272,7 @@ pub enum HandleError {
 
 /// Helper to get gossipsub topics for subscription
 pub fn enr_topics() -> Vec<&'static str> {
-    vec![GRADIENT_TOPIC, CREDIT_TOPIC, ELECTION_TOPIC]
+    vec![GRADIENT_TOPIC, CREDIT_TOPIC, ELECTION_TOPIC, SEPTAL_TOPIC]
 }
 
 #[cfg(test)]
@@ -327,5 +384,33 @@ mod tests {
         let topics = enr_topics();
         assert!(topics.contains(&GRADIENT_TOPIC));
         assert!(topics.contains(&CREDIT_TOPIC));
+        assert!(topics.contains(&ELECTION_TOPIC));
+        assert!(topics.contains(&SEPTAL_TOPIC));
+    }
+
+    #[tokio::test]
+    async fn test_septal_gate_integration() {
+        let node = NodeId::from_bytes([1u8; 32]);
+        let peer = NodeId::from_bytes([2u8; 32]);
+        let (publish, _) = mock_publish();
+        let bridge = EnrBridge::new(node, publish);
+
+        // Initially traffic is allowed
+        assert!(bridge.allows_traffic(&peer).await);
+        assert!(!bridge.is_peer_isolated(&peer).await);
+
+        // Record failures (threshold is 5)
+        for _ in 0..5 {
+            bridge.record_peer_failure(peer, "connection timeout").await;
+        }
+
+        // Now traffic should be blocked
+        assert!(!bridge.allows_traffic(&peer).await);
+        assert!(bridge.is_peer_isolated(&peer).await);
+
+        // Stats should show one isolated node
+        let stats = bridge.septal_stats().await;
+        assert_eq!(stats.isolated_nodes, 1);
+        assert_eq!(stats.closed_gates, 1);
     }
 }
