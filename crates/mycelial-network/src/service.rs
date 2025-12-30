@@ -18,7 +18,7 @@ use tracing::{debug, info, warn};
 
 use crate::behaviour::{MycelialBehaviour, MycelialBehaviourEvent};
 use crate::config::NetworkConfig;
-use crate::enr_bridge::{EnrBridge, CREDIT_TOPIC, GRADIENT_TOPIC};
+use crate::enr_bridge::{EnrBridge, CREDIT_TOPIC, ELECTION_TOPIC, GRADIENT_TOPIC};
 use crate::error::{NetworkError, Result};
 use crate::event::{NetworkEvent, NetworkStats};
 use crate::peer::{ConnectionState, PeerManager};
@@ -293,9 +293,10 @@ impl NetworkService {
             "/mycelial/1.0.0/credit",     // Mutual credit transactions
             "/mycelial/1.0.0/governance", // Proposals and voting
             "/mycelial/1.0.0/resource",   // Resource sharing metrics
-            // ENR bridge topics (gradient and credits)
+            // ENR bridge topics (gradient, credits, election)
             GRADIENT_TOPIC,               // Resource gradient broadcasts
             CREDIT_TOPIC,                 // Credit transfers
+            ELECTION_TOPIC,               // Nexus election
         ];
         for topic_str in topics {
             let topic = libp2p::gossipsub::IdentTopic::new(topic_str);
@@ -478,7 +479,10 @@ impl NetworkService {
                 }
 
                 // Route ENR messages to the bridge handler
-                if topic_str == GRADIENT_TOPIC || topic_str == CREDIT_TOPIC {
+                if topic_str == GRADIENT_TOPIC
+                    || topic_str == CREDIT_TOPIC
+                    || topic_str == ELECTION_TOPIC
+                {
                     let bridge = self.enr_bridge.clone();
                     let data = message.data.clone();
                     tokio::spawn(async move {

@@ -46,6 +46,7 @@ rand = "0.8"
 # Univrs shared crates
 univrs-identity = { path = "../univrs-identity" }
 univrs-state = { path = "../univrs-state" }
+univrs-enr = { path = "../univrs-enr" }
 
 # Database
 sqlx = { version = "0.8", features = ["sqlite", "runtime-tokio"] }

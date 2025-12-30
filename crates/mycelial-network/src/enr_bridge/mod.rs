@@ -5,16 +5,16 @@
 //!
 //! - **Gradient Broadcasting**: Propagate resource availability via gossip
 //! - **Credit Synchronization**: Transfer credits between nodes
+//! - **Nexus Election**: Distributed election for hub nodes
 //!
 //! ## MVP Scope (Phase 0)
 //!
 //! - Local ledger with optimistic updates
 //! - Gossipsub broadcast for transfers
-//! - No consensus (deferred to Phase 3)
+//! - Distributed nexus election
 //!
 //! ## Future Additions (Phase 3+)
 //!
-//! - Distributed nexus election
 //! - OpenRaft consensus for ledger
 //! - Septal gates (circuit breakers)
 //!
@@ -47,26 +47,30 @@
 pub mod credits;
 pub mod gradient;
 pub mod messages;
+pub mod nexus;
 
 pub use credits::{CreditSynchronizer, TransferError, INITIAL_NODE_CREDITS};
-pub use gradient::{GradientBroadcaster, BroadcastError, MAX_GRADIENT_AGE_MS};
-pub use messages::{EnrMessage, CREDIT_TOPIC, GRADIENT_TOPIC};
+pub use gradient::{BroadcastError, GradientBroadcaster, MAX_GRADIENT_AGE_MS};
+pub use messages::{EnrMessage, CREDIT_TOPIC, ELECTION_TOPIC, GRADIENT_TOPIC};
+pub use nexus::{DistributedElection, ElectionError, LocalNodeMetrics};
 
-use tracing::{debug, error};
+use tracing::{debug, error, warn};
 use univrs_enr::{
     core::{Credits, NodeId},
-    nexus::ResourceGradient,
+    nexus::{NexusRole, ResourceGradient},
 };
 
 /// Unified ENR Bridge coordinator
 ///
-/// Ties together gradient broadcasting and credit synchronization,
-/// routing incoming messages to the appropriate handler.
+/// Ties together gradient broadcasting, credit synchronization,
+/// and nexus election, routing incoming messages to the appropriate handler.
 pub struct EnrBridge {
     /// Gradient state and broadcasting
     pub gradient: GradientBroadcaster,
     /// Credit ledger and transfers
     pub credits: CreditSynchronizer,
+    /// Nexus election manager
+    pub election: DistributedElection,
 }
 
 impl EnrBridge {
@@ -91,7 +95,8 @@ impl EnrBridge {
     {
         Self {
             gradient: GradientBroadcaster::new(local_node, publish_fn.clone()),
-            credits: CreditSynchronizer::new(local_node, publish_fn),
+            credits: CreditSynchronizer::new(local_node, publish_fn.clone()),
+            election: DistributedElection::new(local_node, publish_fn),
         }
     }
 
@@ -126,6 +131,11 @@ impl EnrBridge {
                     balance = response.balance.amount,
                     "Received balance response"
                 );
+            }
+            EnrMessage::Election(election_msg) => {
+                if let Err(e) = self.election.handle_election_message(election_msg).await {
+                    warn!("Election message rejected: {}", e);
+                }
             }
         }
 
@@ -164,6 +174,36 @@ impl EnrBridge {
         if pruned > 0 {
             debug!(count = pruned, "Pruned stale gradients");
         }
+
+        // Check election progress
+        if let Err(e) = self.election.check_election_progress().await {
+            debug!("Election progress check: {}", e);
+        }
+    }
+
+    /// Trigger a nexus election for a region
+    pub async fn trigger_election(&self, region_id: String) -> Result<u64, ElectionError> {
+        self.election.trigger_election(region_id).await
+    }
+
+    /// Get current nexus for this node's region
+    pub async fn current_nexus(&self) -> Option<NodeId> {
+        self.election.current_nexus().await
+    }
+
+    /// Get current role (Leaf, Nexus, or PoteauMitan)
+    pub async fn current_role(&self) -> NexusRole {
+        self.election.current_role().await
+    }
+
+    /// Update local node metrics for election eligibility
+    pub async fn update_node_metrics(&self, metrics: LocalNodeMetrics) {
+        self.election.update_metrics(metrics).await;
+    }
+
+    /// Check if an election is in progress
+    pub async fn election_in_progress(&self) -> bool {
+        self.election.election_in_progress().await
     }
 }
 
@@ -175,7 +215,7 @@ pub enum HandleError {
 
 /// Helper to get gossipsub topics for subscription
 pub fn enr_topics() -> Vec<&'static str> {
-    vec![GRADIENT_TOPIC, CREDIT_TOPIC]
+    vec![GRADIENT_TOPIC, CREDIT_TOPIC, ELECTION_TOPIC]
 }
 
 #[cfg(test)]
