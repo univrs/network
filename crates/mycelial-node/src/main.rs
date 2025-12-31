@@ -20,6 +20,9 @@ use mycelial_core::peer::{PeerId, PeerInfo};
 use mycelial_core::reputation::Reputation;
 use mycelial_network::{NetworkService, NetworkHandle, NetworkConfig, NetworkEvent, Keypair, Libp2pPeerId};
 use mycelial_network::{is_economics_topic, parse_economics_message, EconomicsEvent};
+use mycelial_network::enr_bridge::{
+    EnrMessage, GRADIENT_TOPIC, CREDIT_TOPIC, ELECTION_TOPIC, SEPTAL_TOPIC,
+};
 use mycelial_state::SqliteStore;
 use server::messages::{WsMessage, ContributorEntry};
 
@@ -385,6 +388,113 @@ async fn handle_network_event(event: NetworkEvent, state: &AppState, local_peer_
                                 }
                             }
                         }
+                    }
+                }
+            }
+            // Check if this is an ENR bridge message
+            else if topic == GRADIENT_TOPIC || topic == CREDIT_TOPIC || topic == ELECTION_TOPIC || topic == SEPTAL_TOPIC {
+                match EnrMessage::decode(&data) {
+                    Ok(enr_msg) => {
+                        use mycelial_network::enr_bridge::messages::*;
+                        match enr_msg {
+                            EnrMessage::GradientUpdate(update) => {
+                                let _ = state.event_tx.send(WsMessage::GradientUpdate {
+                                    source: update.source.to_string(),
+                                    cpu_available: update.gradient.cpu_available,
+                                    memory_available: update.gradient.memory_available,
+                                    bandwidth_available: update.gradient.bandwidth_available,
+                                    storage_available: update.gradient.storage_available,
+                                    timestamp: update.timestamp.millis as i64,
+                                });
+                            }
+                            EnrMessage::CreditTransfer(transfer_msg) => {
+                                let _ = state.event_tx.send(WsMessage::EnrCreditTransfer {
+                                    from: format!("{}", transfer_msg.transfer.from.node),
+                                    to: format!("{}", transfer_msg.transfer.to.node),
+                                    amount: transfer_msg.transfer.amount.amount,
+                                    tax: transfer_msg.transfer.entropy_cost.amount,
+                                    nonce: transfer_msg.nonce,
+                                    timestamp: ts,
+                                });
+                            }
+                            EnrMessage::BalanceQuery(_) => {
+                                // Balance queries are internal, no dashboard broadcast
+                            }
+                            EnrMessage::BalanceResponse(resp) => {
+                                let _ = state.event_tx.send(WsMessage::EnrBalanceUpdate {
+                                    node_id: "query_response".to_string(),
+                                    balance: resp.balance.amount,
+                                    timestamp: resp.as_of.millis as i64,
+                                });
+                            }
+                            EnrMessage::Election(election_msg) => {
+                                match election_msg {
+                                    ElectionMessage::Announcement(ann) => {
+                                        let _ = state.event_tx.send(WsMessage::ElectionAnnouncement {
+                                            election_id: ann.election_id,
+                                            initiator: ann.initiator.to_string(),
+                                            region_id: ann.region_id,
+                                            timestamp: ann.timestamp.millis as i64,
+                                        });
+                                    }
+                                    ElectionMessage::Candidacy(candidacy) => {
+                                        let _ = state.event_tx.send(WsMessage::ElectionCandidacy {
+                                            election_id: candidacy.election_id,
+                                            candidate: candidacy.candidate.node.to_string(),
+                                            uptime: (candidacy.candidate.uptime * 1000.0) as u64, // Convert f64 to millis
+                                            cpu_available: 0.0, // Not in NexusCandidate, use default
+                                            memory_available: 0.0, // Not in NexusCandidate, use default
+                                            reputation: candidacy.candidate.reputation,
+                                            timestamp: ts,
+                                        });
+                                    }
+                                    ElectionMessage::Vote(vote) => {
+                                        let _ = state.event_tx.send(WsMessage::ElectionVote {
+                                            election_id: vote.election_id,
+                                            voter: vote.voter.to_string(),
+                                            candidate: vote.candidate.to_string(),
+                                            timestamp: vote.timestamp.millis as i64,
+                                        });
+                                    }
+                                    ElectionMessage::Result(result) => {
+                                        let _ = state.event_tx.send(WsMessage::ElectionResult {
+                                            election_id: result.election_id,
+                                            winner: result.winner.to_string(),
+                                            region_id: result.region_id,
+                                            vote_count: result.vote_count,
+                                            timestamp: result.timestamp.millis as i64,
+                                        });
+                                    }
+                                }
+                            }
+                            EnrMessage::Septal(septal_msg) => {
+                                match septal_msg {
+                                    SeptalMessage::StateChange(change) => {
+                                        let _ = state.event_tx.send(WsMessage::SeptalStateChange {
+                                            node_id: change.node.to_string(),
+                                            from_state: format!("{:?}", change.from_state),
+                                            to_state: format!("{:?}", change.to_state),
+                                            reason: change.reason,
+                                            timestamp: change.timestamp.millis as i64,
+                                        });
+                                    }
+                                    SeptalMessage::HealthProbe(_) => {
+                                        // Health probes are internal, no dashboard broadcast
+                                    }
+                                    SeptalMessage::HealthResponse(resp) => {
+                                        let _ = state.event_tx.send(WsMessage::SeptalHealthStatus {
+                                            node_id: resp.node.to_string(),
+                                            is_healthy: resp.is_healthy,
+                                            failure_count: resp.failure_count,
+                                            timestamp: resp.timestamp.millis as i64,
+                                        });
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        warn!("Failed to decode ENR message on {}: {}", topic, e);
                     }
                 }
             }
