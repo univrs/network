@@ -25,6 +25,10 @@ use mycelial_network::enr_bridge::{
 };
 use mycelial_state::SqliteStore;
 use server::messages::{WsMessage, ContributorEntry};
+use server::economics_state::{
+    EconomicsStateManager, CreditLine, Proposal, ProposalStatus, Vouch, Vote, VoteType,
+    ResourceContribution,
+};
 
 #[derive(Parser)]
 #[command(name = "mycelial-node")]
@@ -77,6 +81,8 @@ pub struct AppState {
     pub node_name: String,
     /// Subscribed topics
     pub subscribed_topics: RwLock<Vec<String>>,
+    /// Economics state manager for tracking credit lines, proposals, vouches, resources
+    pub economics: EconomicsStateManager,
 }
 
 #[tokio::main]
@@ -152,6 +158,7 @@ async fn main() -> anyhow::Result<()> {
         start_time: Instant::now(),
         node_name: args.name.clone(),
         subscribed_topics: RwLock::new(Vec::new()),
+        economics: EconomicsStateManager::new(),
     });
 
     // Spawn network service
@@ -244,6 +251,16 @@ async fn handle_network_event(event: NetworkEvent, state: &AppState, local_peer_
                             use mycelial_protocol::VouchMessage;
                             match vouch_msg {
                                 VouchMessage::VouchRequest(req) => {
+                                    // Track vouch in state
+                                    state.economics.add_vouch(Vouch {
+                                        id: req.id.to_string(),
+                                        voucher: req.voucher.clone(),
+                                        vouchee: req.vouchee.clone(),
+                                        weight: req.stake,
+                                        accepted: false, // Pending until ack
+                                        created_at: ts,
+                                    });
+
                                     let _ = state.event_tx.send(WsMessage::VouchRequest {
                                         id: req.id.to_string(),
                                         voucher: req.voucher,
@@ -253,11 +270,16 @@ async fn handle_network_event(event: NetworkEvent, state: &AppState, local_peer_
                                     });
                                 }
                                 VouchMessage::VouchAck(ack) => {
+                                    // Update vouch state and get new reputation
+                                    let vouch_id = ack.vouch_id.to_string();
+                                    let new_rep = state.economics.respond_to_vouch(&vouch_id, ack.accepted)
+                                        .map(|v| state.economics.get_reputation(&v.vouchee));
+
                                     let _ = state.event_tx.send(WsMessage::VouchAck {
                                         id: message_id.to_string(),
-                                        request_id: ack.vouch_id.to_string(),
+                                        request_id: vouch_id,
                                         accepted: ack.accepted,
-                                        new_reputation: None,
+                                        new_reputation: new_rep,
                                         timestamp: ts,
                                     });
                                 }
@@ -273,8 +295,21 @@ async fn handle_network_event(event: NetworkEvent, state: &AppState, local_peer_
                             use mycelial_protocol::CreditMessage;
                             match credit_msg {
                                 CreditMessage::CreateLine(line) => {
+                                    let line_id = line.id.to_string();
+
+                                    // Track credit line in state
+                                    state.economics.upsert_credit_line(CreditLine {
+                                        id: line_id.clone(),
+                                        creditor: line.creditor.clone(),
+                                        debtor: line.debtor.clone(),
+                                        limit: line.limit,
+                                        balance: 0.0,
+                                        created_at: ts,
+                                        updated_at: ts,
+                                    });
+
                                     let _ = state.event_tx.send(WsMessage::CreditLine {
-                                        id: line.id.to_string(),
+                                        id: line_id,
                                         creditor: line.creditor,
                                         debtor: line.debtor,
                                         limit: line.limit,
@@ -283,6 +318,21 @@ async fn handle_network_event(event: NetworkEvent, state: &AppState, local_peer_
                                     });
                                 }
                                 CreditMessage::Transfer(transfer) => {
+                                    // Update credit line balance if exists
+                                    // Transfer from debtor to creditor decreases balance
+                                    // Transfer from creditor to debtor increases balance
+                                    if let Some(line) = state.economics.get_credit_line_between(&transfer.to, &transfer.from) {
+                                        // transfer.from is debtor, transfer.to is creditor
+                                        // Debtor paying back - decrease balance
+                                        let new_balance = (line.balance - transfer.amount).max(0.0);
+                                        state.economics.update_credit_balance(&line.id, new_balance);
+                                    } else if let Some(line) = state.economics.get_credit_line_between(&transfer.from, &transfer.to) {
+                                        // transfer.from is creditor, transfer.to is debtor
+                                        // Extending credit - increase balance
+                                        let new_balance = (line.balance + transfer.amount).min(line.limit);
+                                        state.economics.update_credit_balance(&line.id, new_balance);
+                                    }
+
                                     let _ = state.event_tx.send(WsMessage::CreditTransfer {
                                         id: transfer.id.to_string(),
                                         from: transfer.from,
@@ -306,10 +356,28 @@ async fn handle_network_event(event: NetworkEvent, state: &AppState, local_peer_
                             use mycelial_protocol::GovernanceMessage;
                             match gov_msg {
                                 GovernanceMessage::CreateProposal(proposal) => {
-                                    // quorum is f64 (0.0-1.0), convert to percentage as u32
+                                    let proposal_id = proposal.id.to_string();
+                                    let deadline_ms = proposal.deadline.timestamp_millis();
                                     let quorum_pct = (proposal.quorum * 100.0) as u32;
+
+                                    // Track proposal in state
+                                    state.economics.add_proposal(Proposal {
+                                        id: proposal_id.clone(),
+                                        proposer: proposal.proposer.clone(),
+                                        title: proposal.title.clone(),
+                                        description: proposal.description.clone(),
+                                        proposal_type: format!("{:?}", proposal.proposal_type),
+                                        status: ProposalStatus::Active,
+                                        yes_votes: 0.0,
+                                        no_votes: 0.0,
+                                        quorum: proposal.quorum,
+                                        deadline: deadline_ms,
+                                        created_at: ts,
+                                        votes: std::collections::HashMap::new(),
+                                    });
+
                                     let _ = state.event_tx.send(WsMessage::Proposal {
-                                        id: proposal.id.to_string(),
+                                        id: proposal_id,
                                         proposer: proposal.proposer,
                                         title: proposal.title,
                                         description: proposal.description,
@@ -318,14 +386,31 @@ async fn handle_network_event(event: NetworkEvent, state: &AppState, local_peer_
                                         yes_votes: 0,
                                         no_votes: 0,
                                         quorum: quorum_pct,
-                                        deadline: proposal.deadline.timestamp_millis(),
+                                        deadline: deadline_ms,
                                         timestamp: ts,
                                     });
                                 }
                                 GovernanceMessage::CastVote(vote) => {
+                                    let proposal_id = vote.proposal_id.to_string();
+
+                                    // Parse vote type
+                                    let vote_type = match format!("{:?}", vote.vote).to_lowercase().as_str() {
+                                        "yes" => VoteType::Yes,
+                                        "no" => VoteType::No,
+                                        _ => VoteType::Abstain,
+                                    };
+
+                                    // Record vote in state
+                                    state.economics.record_vote(&proposal_id, Vote {
+                                        voter: vote.voter.clone(),
+                                        vote_type,
+                                        weight: vote.weight,
+                                        timestamp: ts,
+                                    });
+
                                     let _ = state.event_tx.send(WsMessage::VoteCast {
                                         id: message_id.to_string(),
-                                        proposal_id: vote.proposal_id.to_string(),
+                                        proposal_id,
                                         voter: vote.voter,
                                         vote: format!("{:?}", vote.vote),
                                         weight: vote.weight,
@@ -357,10 +442,21 @@ async fn handle_network_event(event: NetworkEvent, state: &AppState, local_peer_
                             use mycelial_protocol::ResourceMessage;
                             match res_msg {
                                 ResourceMessage::Contribution(contrib) => {
+                                    let resource_type = format!("{:?}", contrib.resource_type);
+
+                                    // Record contribution in state
+                                    state.economics.record_resource_contribution(ResourceContribution {
+                                        peer_id: contrib.peer_id.clone(),
+                                        resource_type: resource_type.clone(),
+                                        amount: contrib.amount,
+                                        unit: contrib.unit.clone(),
+                                        timestamp: ts,
+                                    });
+
                                     let _ = state.event_tx.send(WsMessage::ResourceContribution {
                                         id: contrib.id.to_string(),
                                         peer_id: contrib.peer_id,
-                                        resource_type: format!("{:?}", contrib.resource_type),
+                                        resource_type,
                                         amount: contrib.amount,
                                         unit: contrib.unit,
                                         timestamp: ts,
