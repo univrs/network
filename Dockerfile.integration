@@ -1,0 +1,27 @@
+# Integration test Dockerfile
+# Build context should be parent directory containing all univrs-* crates
+FROM rust:latest
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    pkg-config \
+    libssl-dev \
+    protobuf-compiler \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /workspace
+
+# Copy all required crates
+COPY univrs-enr /workspace/univrs-enr
+COPY univrs-identity /workspace/univrs-identity
+COPY univrs-state /workspace/univrs-state
+COPY univrs-network /workspace/univrs-network
+
+WORKDIR /workspace/univrs-network
+
+# Build dependencies (cached layer)
+RUN cargo fetch
+RUN cargo build --package mycelial-network --tests --release
+
+# Run integration tests with --ignored flag
+CMD ["cargo", "test", "--package", "mycelial-network", "--release", "--", "--ignored", "--nocapture", "--test-threads=1"]

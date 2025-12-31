@@ -83,9 +83,54 @@ cargo test --package mycelial-network --test gate_credits test_credit_transfer_w
 RUST_LOG=mycelial_network=debug cargo test --test gate_gradient -- --ignored --nocapture
 ```
 
-## Network Requirements
+## Running in Docker (Recommended)
 
-For reliable test execution:
+For isolated, reproducible test execution, use the Docker setup:
+
+```bash
+# From univrs-network directory
+cd /path/to/univrs-network
+
+# Build the test image (includes all workspace dependencies)
+docker compose -f docker-compose.test.yml build
+
+# Run all integration tests
+docker compose -f docker-compose.test.yml run --rm integration-tests
+
+# Run specific test file
+docker compose -f docker-compose.test.yml run --rm integration-tests \
+  cargo test --package mycelial-network --release --test gate_credits -- --ignored --nocapture
+
+# Clean up
+docker compose -f docker-compose.test.yml down -v
+```
+
+### Docker Setup Files
+
+| File | Purpose |
+|------|---------|
+| `Dockerfile.integration` | Multi-stage build with all univrs-* dependencies |
+| `docker-compose.test.yml` | Orchestrates test container with cargo caching |
+
+### Why Docker?
+
+- **Network Isolation**: Eliminates interference from host network interfaces (Docker bridges, WSL2 virtual NICs)
+- **Reproducibility**: Same environment across all developer machines
+- **Clean State**: Each run starts fresh without stale peer discovery
+- **CI/CD Ready**: Can be integrated into GitHub Actions workflows
+
+## Local Execution
+
+Tests can run locally but may fail due to network interface interference:
+
+```bash
+# May fail on WSL2 or hosts with Docker bridge interfaces
+cargo test --package mycelial-network --test gate_gradient -- --ignored --nocapture
+```
+
+### Network Requirements (Local)
+
+For reliable local test execution:
 - Run on a host without Docker bridge interfaces active
 - Or configure tests to bind only to `127.0.0.1`
 - Tests use ports in range 20000-60000
