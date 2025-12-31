@@ -176,6 +176,88 @@ pub enum WsMessage {
         room_id: String,
         peer_id: String,
     },
+
+    // ============ ENR Bridge Messages ============
+
+    /// Resource gradient update from a node
+    GradientUpdate {
+        source: String,
+        cpu_available: f64,
+        memory_available: f64,
+        bandwidth_available: f64,
+        storage_available: f64,
+        timestamp: i64,
+    },
+
+    /// ENR credit transfer (different from mutual credit)
+    EnrCreditTransfer {
+        from: String,
+        to: String,
+        amount: u64,
+        tax: u64,
+        nonce: u64,
+        timestamp: i64,
+    },
+
+    /// ENR balance update
+    EnrBalanceUpdate {
+        node_id: String,
+        balance: u64,
+        timestamp: i64,
+    },
+
+    /// Nexus election announcement
+    ElectionAnnouncement {
+        election_id: u64,
+        initiator: String,
+        region_id: String,
+        timestamp: i64,
+    },
+
+    /// Nexus election candidacy
+    ElectionCandidacy {
+        election_id: u64,
+        candidate: String,
+        uptime: u64,
+        cpu_available: f64,
+        memory_available: f64,
+        reputation: f64,
+        timestamp: i64,
+    },
+
+    /// Nexus election vote
+    ElectionVote {
+        election_id: u64,
+        voter: String,
+        candidate: String,
+        timestamp: i64,
+    },
+
+    /// Nexus election result
+    ElectionResult {
+        election_id: u64,
+        winner: String,
+        region_id: String,
+        vote_count: u32,
+        timestamp: i64,
+    },
+
+    /// Septal gate state change (circuit breaker)
+    SeptalStateChange {
+        node_id: String,
+        from_state: String,
+        to_state: String,
+        reason: String,
+        timestamp: i64,
+    },
+
+    /// Septal health probe response
+    SeptalHealthStatus {
+        node_id: String,
+        is_healthy: bool,
+        failure_count: u32,
+        timestamp: i64,
+    },
 }
 
 /// Entry in the peers list
