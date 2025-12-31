@@ -1,0 +1,17 @@
+services:
+  integration-tests:
+    build:
+      context: ..
+      dockerfile: univrs-network/Dockerfile.integration
+    network_mode: bridge
+    environment:
+      - RUST_LOG=info
+      - RUST_BACKTRACE=1
+    volumes:
+      # Mount cargo registry for faster rebuilds
+      - cargo-registry:/usr/local/cargo/registry
+      - cargo-git:/usr/local/cargo/git
+
+volumes:
+  cargo-registry:
+  cargo-git:
