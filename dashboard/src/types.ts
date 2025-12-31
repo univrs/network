@@ -383,3 +383,125 @@ export interface OrchestratorEvent {
   data: unknown;
   timestamp: number;
 }
+
+// ============ ENR Bridge Types (Phase 3) ============
+
+// Resource gradient update from a node
+export interface GradientUpdate {
+  source: string;
+  cpuAvailable: number;
+  memoryAvailable: number;
+  bandwidthAvailable: number;
+  storageAvailable: number;
+  timestamp: number;
+}
+
+// ENR credit transfer (different from mutual credit)
+export interface EnrCreditTransfer {
+  from: string;
+  to: string;
+  amount: number;
+  tax: number;
+  nonce: number;
+  timestamp: number;
+}
+
+// ENR balance update
+export interface EnrBalanceUpdate {
+  nodeId: string;
+  balance: number;
+  timestamp: number;
+}
+
+// Nexus election announcement
+export interface ElectionAnnouncement {
+  electionId: number;
+  initiator: string;
+  regionId: string;
+  timestamp: number;
+}
+
+// Nexus election candidacy
+export interface ElectionCandidacy {
+  electionId: number;
+  candidate: string;
+  uptime: number;
+  cpuAvailable: number;
+  memoryAvailable: number;
+  reputation: number;
+  timestamp: number;
+}
+
+// Nexus election vote
+export interface ElectionVote {
+  electionId: number;
+  voter: string;
+  candidate: string;
+  timestamp: number;
+}
+
+// Nexus election result
+export interface ElectionResult {
+  electionId: number;
+  winner: string;
+  regionId: string;
+  voteCount: number;
+  timestamp: number;
+}
+
+// Septal gate state (circuit breaker)
+export type SeptalState = 'closed' | 'open' | 'half_open';
+
+// Septal gate state change
+export interface SeptalStateChange {
+  nodeId: string;
+  fromState: SeptalState;
+  toState: SeptalState;
+  reason: string;
+  timestamp: number;
+}
+
+// Septal health probe response
+export interface SeptalHealthStatus {
+  nodeId: string;
+  isHealthy: boolean;
+  failureCount: number;
+  timestamp: number;
+}
+
+// Combined election state for tracking active elections
+export interface Election {
+  id: number;
+  regionId: string;
+  initiator: string;
+  status: 'announced' | 'voting' | 'completed';
+  candidates: ElectionCandidacy[];
+  votes: ElectionVote[];
+  winner?: string;
+  voteCount?: number;
+  startedAt: number;
+  completedAt?: number;
+}
+
+// Per-node ENR state
+export interface NodeEnrState {
+  nodeId: string;
+  balance: number;
+  gradient?: GradientUpdate;
+  septalState: SeptalState;
+  septalHealthy: boolean;
+  failureCount: number;
+  lastUpdated: number;
+}
+
+// Economics summary for the whole network
+export interface EconomicsSummary {
+  totalCreditLines: number;
+  totalCreditLimit: number;
+  totalCreditBalance: number;
+  activeProposals: number;
+  totalVouches: number;
+  totalResourceContributions: number;
+  enrTotalBalance: number;
+  activeElections: number;
+}

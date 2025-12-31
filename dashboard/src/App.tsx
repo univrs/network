@@ -43,6 +43,11 @@ function App() {
     vouches: _vouches, // Available for future use
     resourceContributions: _resourceContributions, // Available for future use
     resourcePool,
+    // ENR Bridge state
+    gradients: _gradients, // Available for ENR UI
+    enrTransfers: _enrTransfers, // Available for ENR UI
+    nodeEnrStates: _nodeEnrStates, // Available for ENR UI
+    elections: _elections, // Available for ENR UI
     // Economics functions
     sendVouch,
     sendCreditLine,

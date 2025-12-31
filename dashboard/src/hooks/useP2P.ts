@@ -14,6 +14,18 @@ import type {
   ResourcePool,
   Conversation,
   Room,
+  // ENR Bridge types
+  GradientUpdate,
+  EnrCreditTransfer,
+  ElectionAnnouncement,
+  ElectionCandidacy,
+  ElectionVote,
+  ElectionResult,
+  SeptalStateChange,
+  SeptalHealthStatus,
+  Election,
+  NodeEnrState,
+  SeptalState,
 } from '@/types';
 
 interface UseP2POptions {
@@ -39,6 +51,11 @@ interface P2PState {
   vouches: VouchRequest[];
   resourceContributions: ResourceContribution[];
   resourcePool: ResourcePool | null;
+  // ENR Bridge state
+  gradients: Map<string, GradientUpdate>;
+  enrTransfers: EnrCreditTransfer[];
+  nodeEnrStates: Map<string, NodeEnrState>;
+  elections: Map<number, Election>;
 }
 
 // Community conversation ID constant
@@ -178,6 +195,11 @@ export function useP2P(options: UseP2POptions = {}) {
     vouches: [],
     resourceContributions: [],
     resourcePool: null,
+    // ENR Bridge initial state
+    gradients: new Map(),
+    enrTransfers: [],
+    nodeEnrStates: new Map(),
+    elections: new Map(),
   });
 
   // Fetch peers from P2P node REST API
@@ -429,6 +451,229 @@ export function useP2P(options: UseP2POptions = {}) {
         const pool = (message.data || message) as ResourcePool;
         setState(s => ({ ...s, resourcePool: pool }));
         console.log('Received resource pool update:', pool);
+        break;
+      }
+
+      // ============ ENR Bridge Message Handlers ============
+
+      case 'gradient_update': {
+        const data = message.data || message;
+        const gradient: GradientUpdate = {
+          source: (data as Record<string, unknown>).source as string,
+          cpuAvailable: (data as Record<string, unknown>).cpu_available as number,
+          memoryAvailable: (data as Record<string, unknown>).memory_available as number,
+          bandwidthAvailable: (data as Record<string, unknown>).bandwidth_available as number,
+          storageAvailable: (data as Record<string, unknown>).storage_available as number,
+          timestamp: (data as Record<string, unknown>).timestamp as number,
+        };
+        setState(s => {
+          const newGradients = new Map(s.gradients);
+          newGradients.set(gradient.source, gradient);
+          return { ...s, gradients: newGradients };
+        });
+        console.log('Received gradient update:', gradient);
+        break;
+      }
+
+      case 'enr_credit_transfer': {
+        const data = message.data || message;
+        const transfer: EnrCreditTransfer = {
+          from: (data as Record<string, unknown>).from as string,
+          to: (data as Record<string, unknown>).to as string,
+          amount: (data as Record<string, unknown>).amount as number,
+          tax: (data as Record<string, unknown>).tax as number,
+          nonce: (data as Record<string, unknown>).nonce as number,
+          timestamp: (data as Record<string, unknown>).timestamp as number,
+        };
+        setState(s => ({
+          ...s,
+          enrTransfers: [...s.enrTransfers.slice(-99), transfer],
+        }));
+        console.log('Received ENR credit transfer:', transfer);
+        break;
+      }
+
+      case 'enr_balance_update': {
+        const data = (message.data || message) as Record<string, unknown>;
+        const nodeId = (data.node_id || data.nodeId) as string;
+        const balance = data.balance as number;
+        setState(s => {
+          const newStates = new Map(s.nodeEnrStates);
+          const existing = newStates.get(nodeId) || {
+            nodeId,
+            balance: 0,
+            septalState: 'closed' as SeptalState,
+            septalHealthy: true,
+            failureCount: 0,
+            lastUpdated: Date.now(),
+          };
+          newStates.set(nodeId, { ...existing, balance, lastUpdated: Date.now() });
+          return { ...s, nodeEnrStates: newStates };
+        });
+        console.log('Received ENR balance update:', { nodeId, balance });
+        break;
+      }
+
+      case 'election_announcement': {
+        const data = (message.data || message) as Record<string, unknown>;
+        const announcement: ElectionAnnouncement = {
+          electionId: (data.election_id || data.electionId) as number,
+          initiator: data.initiator as string,
+          regionId: (data.region_id || data.regionId) as string,
+          timestamp: data.timestamp as number,
+        };
+        setState(s => {
+          const newElections = new Map(s.elections);
+          newElections.set(announcement.electionId, {
+            id: announcement.electionId,
+            regionId: announcement.regionId,
+            initiator: announcement.initiator,
+            status: 'announced',
+            candidates: [],
+            votes: [],
+            startedAt: announcement.timestamp,
+          });
+          return { ...s, elections: newElections };
+        });
+        console.log('Received election announcement:', announcement);
+        break;
+      }
+
+      case 'election_candidacy': {
+        const data = (message.data || message) as Record<string, unknown>;
+        const candidacy: ElectionCandidacy = {
+          electionId: (data.election_id || data.electionId) as number,
+          candidate: data.candidate as string,
+          uptime: data.uptime as number,
+          cpuAvailable: (data.cpu_available || data.cpuAvailable) as number,
+          memoryAvailable: (data.memory_available || data.memoryAvailable) as number,
+          reputation: data.reputation as number,
+          timestamp: data.timestamp as number,
+        };
+        setState(s => {
+          const newElections = new Map(s.elections);
+          const election = newElections.get(candidacy.electionId);
+          if (election) {
+            const existingIndex = election.candidates.findIndex(c => c.candidate === candidacy.candidate);
+            if (existingIndex >= 0) {
+              election.candidates[existingIndex] = candidacy;
+            } else {
+              election.candidates.push(candidacy);
+            }
+            election.status = 'voting';
+            newElections.set(candidacy.electionId, { ...election });
+          }
+          return { ...s, elections: newElections };
+        });
+        console.log('Received election candidacy:', candidacy);
+        break;
+      }
+
+      case 'election_vote': {
+        const data = (message.data || message) as Record<string, unknown>;
+        const vote: ElectionVote = {
+          electionId: (data.election_id || data.electionId) as number,
+          voter: data.voter as string,
+          candidate: data.candidate as string,
+          timestamp: data.timestamp as number,
+        };
+        setState(s => {
+          const newElections = new Map(s.elections);
+          const election = newElections.get(vote.electionId);
+          if (election) {
+            election.votes.push(vote);
+            newElections.set(vote.electionId, { ...election });
+          }
+          return { ...s, elections: newElections };
+        });
+        console.log('Received election vote:', vote);
+        break;
+      }
+
+      case 'election_result': {
+        const data = (message.data || message) as Record<string, unknown>;
+        const result: ElectionResult = {
+          electionId: (data.election_id || data.electionId) as number,
+          winner: data.winner as string,
+          regionId: (data.region_id || data.regionId) as string,
+          voteCount: (data.vote_count || data.voteCount) as number,
+          timestamp: data.timestamp as number,
+        };
+        setState(s => {
+          const newElections = new Map(s.elections);
+          const election = newElections.get(result.electionId);
+          if (election) {
+            newElections.set(result.electionId, {
+              ...election,
+              status: 'completed',
+              winner: result.winner,
+              voteCount: result.voteCount,
+              completedAt: result.timestamp,
+            });
+          }
+          return { ...s, elections: newElections };
+        });
+        console.log('Received election result:', result);
+        break;
+      }
+
+      case 'septal_state_change': {
+        const data = (message.data || message) as Record<string, unknown>;
+        const change: SeptalStateChange = {
+          nodeId: (data.node_id || data.nodeId) as string,
+          fromState: (data.from_state || data.fromState) as SeptalState,
+          toState: (data.to_state || data.toState) as SeptalState,
+          reason: data.reason as string,
+          timestamp: data.timestamp as number,
+        };
+        setState(s => {
+          const newStates = new Map(s.nodeEnrStates);
+          const existing = newStates.get(change.nodeId) || {
+            nodeId: change.nodeId,
+            balance: 0,
+            septalState: 'closed' as SeptalState,
+            septalHealthy: true,
+            failureCount: 0,
+            lastUpdated: Date.now(),
+          };
+          newStates.set(change.nodeId, {
+            ...existing,
+            septalState: change.toState,
+            lastUpdated: Date.now(),
+          });
+          return { ...s, nodeEnrStates: newStates };
+        });
+        console.log('Received septal state change:', change);
+        break;
+      }
+
+      case 'septal_health_status': {
+        const data = (message.data || message) as Record<string, unknown>;
+        const status: SeptalHealthStatus = {
+          nodeId: (data.node_id || data.nodeId) as string,
+          isHealthy: (data.is_healthy || data.isHealthy) as boolean,
+          failureCount: (data.failure_count || data.failureCount) as number,
+          timestamp: data.timestamp as number,
+        };
+        setState(s => {
+          const newStates = new Map(s.nodeEnrStates);
+          const existing = newStates.get(status.nodeId) || {
+            nodeId: status.nodeId,
+            balance: 0,
+            septalState: 'closed' as SeptalState,
+            septalHealthy: true,
+            failureCount: 0,
+            lastUpdated: Date.now(),
+          };
+          newStates.set(status.nodeId, {
+            ...existing,
+            septalHealthy: status.isHealthy,
+            failureCount: status.failureCount,
+            lastUpdated: Date.now(),
+          });
+          return { ...s, nodeEnrStates: newStates };
+        });
+        console.log('Received septal health status:', status);
         break;
       }
 
