@@ -14,6 +14,10 @@ import { ResourcePanel } from '@/components/ResourcePanel';
 import { WorkloadList } from '@/components/WorkloadList';
 import { NodeStatus } from '@/components/NodeStatus';
 import { ClusterOverview } from '@/components/ClusterOverview';
+import { GradientPanel } from '@/components/GradientPanel';
+import { ElectionPanel } from '@/components/ElectionPanel';
+import { SeptalPanel } from '@/components/SeptalPanel';
+import { EnrCreditPanel } from '@/components/EnrCreditPanel';
 import type { NormalizedPeer, GeneratedIdentity, VouchRequest, CreditTransfer, Proposal, Vote } from '@/types';
 
 function App() {
@@ -44,10 +48,10 @@ function App() {
     resourceContributions: _resourceContributions, // Available for future use
     resourcePool,
     // ENR Bridge state
-    gradients: _gradients, // Available for ENR UI
-    enrTransfers: _enrTransfers, // Available for ENR UI
-    nodeEnrStates: _nodeEnrStates, // Available for ENR UI
-    elections: _elections, // Available for ENR UI
+    gradients,
+    enrTransfers,
+    nodeEnrStates,
+    elections,
     // Economics functions
     sendVouch,
     sendCreditLine,
@@ -77,6 +81,11 @@ function App() {
   const [showWorkloads, setShowWorkloads] = useState(false);
   const [showNodes, setShowNodes] = useState(false);
   const [showCluster, setShowCluster] = useState(false);
+  // ENR Bridge panel states
+  const [showGradients, setShowGradients] = useState(false);
+  const [showElections, setShowElections] = useState(false);
+  const [showSeptal, setShowSeptal] = useState(false);
+  const [showEnrCredits, setShowEnrCredits] = useState(false);
   const [localIdentity, setLocalIdentity] = useState<GeneratedIdentity | null>(null);
 
   const handleOnboardingComplete = useCallback((identity: GeneratedIdentity) => {
@@ -249,6 +258,56 @@ function App() {
               </svg>
               Cluster
             </button>
+            {/* ENR Bridge Separator */}
+            <div className="w-px h-6 bg-border-subtle mx-1" />
+            {/* ENR Bridge Buttons */}
+            <button
+              onClick={() => setShowGradients(true)}
+              className="btn-outline px-3 py-1.5 rounded-lg text-xs opacity-75 hover:opacity-100 transition-opacity flex items-center gap-1.5"
+              title="Resource Gradients"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M2 20V8l7 4v8M9 20V12l6 4v4M15 20v-4l7 4" />
+              </svg>
+              Gradients
+            </button>
+            <button
+              onClick={() => setShowElections(true)}
+              className="btn-outline px-3 py-1.5 rounded-lg text-xs opacity-75 hover:opacity-100 transition-opacity flex items-center gap-1.5"
+              title="Nexus Elections"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M20 12V8H6a2 2 0 01-2-2V4h16v4" />
+                <path d="M4 6v12a2 2 0 002 2h14v-4" />
+                <path d="M18 12v8" />
+                <path d="M18 12l-4 4" />
+                <path d="M18 12l4 4" />
+              </svg>
+              Elections
+            </button>
+            <button
+              onClick={() => setShowSeptal(true)}
+              className="btn-outline px-3 py-1.5 rounded-lg text-xs opacity-75 hover:opacity-100 transition-opacity flex items-center gap-1.5"
+              title="Septal Gates (Circuit Breakers)"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M18 6L6 18M6 6l12 12" />
+                <circle cx="12" cy="12" r="10" />
+              </svg>
+              Septal
+            </button>
+            <button
+              onClick={() => setShowEnrCredits(true)}
+              className="btn-outline px-3 py-1.5 rounded-lg text-xs opacity-75 hover:opacity-100 transition-opacity flex items-center gap-1.5"
+              title="ENR Credits"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="10" />
+                <path d="M16 8h-6a2 2 0 00-2 2v4a2 2 0 002 2h6" />
+                <path d="M12 12h4" />
+              </svg>
+              ENR
+            </button>
             <button
               onClick={() => setShowOnboarding(true)}
               className="btn-outline px-3 py-1.5 rounded-lg text-xs opacity-75 hover:opacity-100 transition-opacity"
@@ -414,6 +473,39 @@ function App() {
           nodes={orchestratorNodes}
           workloads={workloads}
           onClose={() => setShowCluster(false)}
+        />
+      )}
+
+      {/* ENR Bridge Panels */}
+      {showGradients && (
+        <GradientPanel
+          gradients={gradients}
+          nodeEnrStates={nodeEnrStates}
+          onClose={() => setShowGradients(false)}
+        />
+      )}
+
+      {showElections && (
+        <ElectionPanel
+          elections={elections}
+          localPeerId={localPeerId}
+          onClose={() => setShowElections(false)}
+        />
+      )}
+
+      {showSeptal && (
+        <SeptalPanel
+          nodeEnrStates={nodeEnrStates}
+          onClose={() => setShowSeptal(false)}
+        />
+      )}
+
+      {showEnrCredits && (
+        <EnrCreditPanel
+          nodeEnrStates={nodeEnrStates}
+          enrTransfers={enrTransfers}
+          localPeerId={localPeerId}
+          onClose={() => setShowEnrCredits(false)}
         />
       )}
     </div>

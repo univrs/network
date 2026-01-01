@@ -220,14 +220,15 @@ export const mockWebSocketServer = {
   },
 
   /** Simulate vouch request */
-  sendVouchRequest(vouch: { id: string; voucher: string; vouchee: string; weight: number }) {
+  sendVouchRequest(vouch: { id: string; fromPeerId: string; toPeerId: string; stake: number; timestamp?: number; message?: string }) {
     this.broadcast({
       type: 'vouch_request',
       id: vouch.id,
-      voucher: vouch.voucher,
-      vouchee: vouch.vouchee,
-      weight: vouch.weight,
-      timestamp: Date.now(),
+      voucher: vouch.fromPeerId,
+      vouchee: vouch.toPeerId,
+      weight: vouch.stake,
+      message: vouch.message,
+      timestamp: vouch.timestamp || Date.now(),
     });
   },
 

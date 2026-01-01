@@ -11,9 +11,9 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { renderHook, act, waitFor } from '@testing-library/react';
+import { renderHook, act } from '@testing-library/react';
 import { useP2P } from '@/hooks/useP2P';
-import { mockWebSocketServer, MockWebSocket } from '../mocks/websocket';
+import { mockWebSocketServer } from '../mocks/websocket';
 
 describe('useP2P Hook', () => {
   beforeEach(() => {
@@ -72,8 +72,6 @@ describe('useP2P Hook', () => {
       await act(async () => {
         await vi.advanceTimersByTimeAsync(100);
       });
-
-      const initialInstance = mockWebSocketServer.lastInstance;
 
       act(() => {
         result.current.resetConnection();
@@ -471,14 +469,15 @@ describe('useP2P Hook', () => {
       act(() => {
         mockWebSocketServer.sendVouchRequest({
           id: 'vouch-123',
-          voucher: '12D3KooWAlice',
-          vouchee: '12D3KooWBob',
-          weight: 0.8,
+          fromPeerId: '12D3KooWAlice',
+          toPeerId: '12D3KooWBob',
+          stake: 0.8,
+          timestamp: Date.now(),
         });
       });
 
       expect(result.current.vouches.length).toBe(1);
-      expect(result.current.vouches[0].weight).toBe(0.8);
+      expect(result.current.vouches[0].stake).toBe(0.8);
     });
 
     it('sends vouch request', async () => {
@@ -489,10 +488,9 @@ describe('useP2P Hook', () => {
       });
 
       const vouchRequest = {
-        id: 'vouch-456',
-        voucher: 'local-peer',
-        vouchee: '12D3KooWBob',
-        weight: 0.9,
+        fromPeerId: 'local-peer',
+        toPeerId: '12D3KooWBob',
+        stake: 0.9,
         timestamp: Date.now(),
       };
 
