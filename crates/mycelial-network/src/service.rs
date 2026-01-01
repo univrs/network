@@ -14,11 +14,13 @@ use tracing::{debug, info, warn};
 
 use crate::behaviour::{MycelialBehaviour, MycelialBehaviourEvent};
 use crate::config::NetworkConfig;
+#[cfg(feature = "univrs-compat")]
 use crate::enr_bridge::{EnrBridge, CREDIT_TOPIC, ELECTION_TOPIC, GRADIENT_TOPIC, SEPTAL_TOPIC};
 use crate::error::{NetworkError, Result};
 use crate::event::{NetworkEvent, NetworkStats};
 use crate::peer::{ConnectionState, PeerManager};
 use crate::transport::{self, TransportConfig};
+#[cfg(feature = "univrs-compat")]
 use univrs_enr::core::NodeId;
 
 /// Commands sent to the network service
@@ -182,7 +184,8 @@ pub struct NetworkService {
     start_time: Instant,
     /// Running flag
     running: bool,
-    /// ENR bridge for economic primitives
+    /// ENR bridge for economic primitives (requires univrs-compat feature)
+    #[cfg(feature = "univrs-compat")]
     enr_bridge: Arc<EnrBridge>,
 }
 
@@ -223,26 +226,29 @@ impl NetworkService {
             local_peer_id,
         };
 
-        // Create ENR bridge with publish callback
-        // Convert PeerId to NodeId (use peer_id bytes, padded/truncated to 32)
-        let peer_id_bytes = local_peer_id.to_bytes();
-        let mut node_id_bytes = [0u8; 32];
-        let len = peer_id_bytes.len().min(32);
-        node_id_bytes[..len].copy_from_slice(&peer_id_bytes[..len]);
-        let local_node_id = NodeId::from_bytes(node_id_bytes);
+        // Create ENR bridge with publish callback (requires univrs-compat feature)
+        #[cfg(feature = "univrs-compat")]
+        let enr_bridge = {
+            // Convert PeerId to NodeId (use peer_id bytes, padded/truncated to 32)
+            let peer_id_bytes = local_peer_id.to_bytes();
+            let mut node_id_bytes = [0u8; 32];
+            let len = peer_id_bytes.len().min(32);
+            node_id_bytes[..len].copy_from_slice(&peer_id_bytes[..len]);
+            let local_node_id = NodeId::from_bytes(node_id_bytes);
 
-        // Create publish callback that uses the command channel
-        let publish_tx = command_tx.clone();
-        let publish_fn = move |topic: String, data: Vec<u8>| {
-            // Use try_send which is non-blocking and works in any context
-            // This may fail if the channel is full, but that's acceptable
-            // for gossip messages which can be retried
-            publish_tx
-                .try_send(NetworkCommand::Publish { topic, data })
-                .map_err(|e| e.to_string())
+            // Create publish callback that uses the command channel
+            let publish_tx = command_tx.clone();
+            let publish_fn = move |topic: String, data: Vec<u8>| {
+                // Use try_send which is non-blocking and works in any context
+                // This may fail if the channel is full, but that's acceptable
+                // for gossip messages which can be retried
+                publish_tx
+                    .try_send(NetworkCommand::Publish { topic, data })
+                    .map_err(|e| e.to_string())
+            };
+
+            Arc::new(EnrBridge::new(local_node_id, publish_fn))
         };
-
-        let enr_bridge = Arc::new(EnrBridge::new(local_node_id, publish_fn));
 
         let service = Self {
             swarm,
@@ -255,6 +261,7 @@ impl NetworkService {
             stats: Arc::new(RwLock::new(NetworkStats::default())),
             start_time: Instant::now(),
             running: false,
+            #[cfg(feature = "univrs-compat")]
             enr_bridge,
         };
 
@@ -266,7 +273,8 @@ impl NetworkService {
         &self.peer_manager
     }
 
-    /// Get a reference to the ENR bridge for economic operations
+    /// Get a reference to the ENR bridge for economic operations (requires univrs-compat feature)
+    #[cfg(feature = "univrs-compat")]
     pub fn enr_bridge(&self) -> &Arc<EnrBridge> {
         &self.enr_bridge
     }
@@ -295,7 +303,8 @@ impl NetworkService {
         // Note: mesh_n=2, mesh_n_low=1 configured for small test networks
         info!("Gossipsub config: mesh_outbound_min=0, mesh_n=2, mesh_n_low=1, mesh_n_high=4 (optimized for small networks)");
 
-        let topics = [
+        // Core topics always subscribed
+        let core_topics = [
             // Core messaging topics
             "/mycelial/1.0.0/chat",
             "/mycelial/1.0.0/announce",
@@ -306,12 +315,25 @@ impl NetworkService {
             "/mycelial/1.0.0/credit",     // Mutual credit transactions
             "/mycelial/1.0.0/governance", // Proposals and voting
             "/mycelial/1.0.0/resource",   // Resource sharing metrics
-            // ENR bridge topics (gradient, credits, election, septal)
+        ];
+
+        // ENR bridge topics (only with univrs-compat feature)
+        #[cfg(feature = "univrs-compat")]
+        let enr_topics = [
             GRADIENT_TOPIC, // Resource gradient broadcasts
             CREDIT_TOPIC,   // Credit transfers
             ELECTION_TOPIC, // Nexus election
             SEPTAL_TOPIC,   // Septal gate (circuit breaker)
         ];
+        #[cfg(not(feature = "univrs-compat"))]
+        let enr_topics: [&str; 0] = [];
+
+        // Combine all topics
+        let topics: Vec<&str> = core_topics
+            .iter()
+            .copied()
+            .chain(enr_topics.iter().copied())
+            .collect();
         for topic_str in topics {
             let topic = libp2p::gossipsub::IdentTopic::new(topic_str);
             match self.swarm.behaviour_mut().gossipsub.subscribe(&topic) {
@@ -520,7 +542,8 @@ impl NetworkService {
                     stats.bytes_received += message.data.len() as u64;
                 }
 
-                // Route ENR messages to the bridge handler
+                // Route ENR messages to the bridge handler (requires univrs-compat feature)
+                #[cfg(feature = "univrs-compat")]
                 if topic_str == GRADIENT_TOPIC
                     || topic_str == CREDIT_TOPIC
                     || topic_str == ELECTION_TOPIC

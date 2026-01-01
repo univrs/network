@@ -422,8 +422,7 @@ impl SeptalGateManager {
 
         let msg = EnrMessage::Septal(SeptalMessage::HealthResponse(response));
         let bytes = msg.encode().map_err(|_| SeptalError::EncodeFailed)?;
-        (self.publish_fn)(SEPTAL_TOPIC.to_string(), bytes)
-            .map_err(SeptalError::PublishFailed)?;
+        (self.publish_fn)(SEPTAL_TOPIC.to_string(), bytes).map_err(SeptalError::PublishFailed)?;
 
         Ok(())
     }
@@ -482,8 +481,7 @@ impl SeptalGateManager {
 
         let msg = EnrMessage::Septal(SeptalMessage::HealthProbe(probe));
         let bytes = msg.encode().map_err(|_| SeptalError::EncodeFailed)?;
-        (self.publish_fn)(SEPTAL_TOPIC.to_string(), bytes)
-            .map_err(SeptalError::PublishFailed)?;
+        (self.publish_fn)(SEPTAL_TOPIC.to_string(), bytes).map_err(SeptalError::PublishFailed)?;
 
         Ok(())
     }

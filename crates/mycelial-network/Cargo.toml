@@ -3,8 +3,14 @@ name = "mycelial-network"
 version.workspace = true
 edition.workspace = true
 
+[features]
+default = ["univrs-compat"]
+test-utils = []
+univrs-compat = ["dep:univrs-enr", "mycelial-core/univrs-compat"]
+openraft = ["dep:openraft", "dep:sled", "dep:bincode"]
+
 [dependencies]
-univrs-enr = { workspace = true }
+univrs-enr = { workspace = true, optional = true }
 serde_cbor = "0.11"
 mycelial-core = { path = "../mycelial-core" }
 mycelial-protocol = { path = "../mycelial-protocol" }
@@ -23,8 +29,15 @@ uuid.workspace = true
 rand.workspace = true
 sha2 = "0.10"
 
+# OpenRaft consensus (Phase 1)
+openraft = { version = "0.9", features = ["serde"], optional = true }
+sled = { version = "0.34", optional = true }
+bincode = { version = "1.3", optional = true }
+
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util", "macros", "rt-multi-thread"] }
 tracing-subscriber.workspace = true
-univrs-enr = { workspace = true }
 serde_cbor = "0.11"
+
+[lints]
+workspace = true

@@ -34,3 +34,6 @@ serde_json = { workspace = true }
 [[test]]
 name = "integration"
 path = "tests/integration/mod.rs"
+
+[lints]
+workspace = true

@@ -58,8 +58,13 @@ pub mod peer;
 pub mod service;
 pub mod transport;
 
-// Adding enr
+// ENR bridge module (requires univrs-compat feature for full univrs-enr integration)
+#[cfg(feature = "univrs-compat")]
 pub mod enr_bridge;
+
+// OpenRaft consensus layer (Phase 1)
+#[cfg(feature = "openraft")]
+pub mod raft;
 
 // Re-exports
 pub use behaviour::{topics, MycelialBehaviour, MycelialBehaviourEvent};
@@ -72,6 +77,11 @@ pub use event::{NetworkEvent, NetworkStats};
 pub use peer::{ConnectionState, PeerInfo, PeerManager};
 pub use service::{NetworkCommand, NetworkHandle, NetworkService};
 pub use transport::{create_transport, extract_peer_id, parse_multiaddr, TransportConfig};
+
+// Test utilities - available with test-utils feature or in tests
+// TODO: Add test_utils module to service when needed
+// #[cfg(any(test, feature = "test-utils"))]
+// pub use service::test_utils;
 
 // Re-export libp2p types commonly used
 pub use libp2p::identity::Keypair;

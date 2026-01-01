@@ -1,0 +1,93 @@
+# =============================================================================
+# Mycelial P2P Network - Docker Compose
+# =============================================================================
+# Local development and testing stack
+#
+# Usage:
+#   docker-compose up -d              # Start all services
+#   docker-compose up -d --scale peer=3  # Start with 3 peer nodes
+#   docker-compose logs -f            # Follow logs
+#   docker-compose down               # Stop all services
+# =============================================================================
+
+version: '3.8'
+
+services:
+  # ---------------------------------------------------------------------------
+  # Bootstrap Node - Primary P2P entry point
+  # ---------------------------------------------------------------------------
+  bootstrap:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mycelial-bootstrap
+    ports:
+      - "8080:8080"   # HTTP/WebSocket
+      - "9000:9000"   # P2P TCP
+    environment:
+      - RUST_LOG=info
+    command: ["--bootstrap", "--name", "Bootstrap", "--port", "9000", "--http-port", "8080"]
+    volumes:
+      - bootstrap-data:/app/data
+    networks:
+      - mycelial-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # ---------------------------------------------------------------------------
+  # Peer Nodes - Additional P2P participants (scalable)
+  # ---------------------------------------------------------------------------
+  peer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      bootstrap:
+        condition: service_healthy
+    environment:
+      - RUST_LOG=info
+    command: ["--name", "Peer", "--connect", "/ip4/bootstrap/tcp/9000"]
+    networks:
+      - mycelial-network
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+  # ---------------------------------------------------------------------------
+  # Dashboard - Web UI
+  # ---------------------------------------------------------------------------
+  dashboard:
+    build:
+      context: ./dashboard
+      dockerfile: Dockerfile
+      args:
+        - VITE_P2P_WS_URL=ws://localhost:8080/ws
+        - VITE_P2P_API_URL=http://localhost:8080
+        - VITE_USE_MOCK_DATA=false
+    container_name: mycelial-dashboard
+    ports:
+      - "3000:80"
+    depends_on:
+      bootstrap:
+        condition: service_healthy
+    networks:
+      - mycelial-network
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+networks:
+  mycelial-network:
+    driver: bridge
+
+volumes:
+  bootstrap-data:

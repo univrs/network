@@ -963,11 +963,11 @@ mod tests {
             "2wMHpFAjZbL9GkXP8n3E3",
             "2wMHpFAjZbL9GkXP8n3E4",
         ];
-        for i in 0..5 {
+        for (i, test_key) in test_keys.iter().enumerate() {
             let peer_id = PeerId(format!("peer_{}", i));
             let peer_info = PeerInfo {
                 id: peer_id.clone(),
-                public_key: test_keys[i].to_string(), // base58 encoded
+                public_key: test_key.to_string(), // base58 encoded
                 addresses: vec![],
                 first_seen: Utc::now(),
                 last_seen: Utc::now(),
