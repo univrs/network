@@ -9,26 +9,28 @@ mod server;
 
 use clap::Parser;
 use parking_lot::RwLock;
-use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
+use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::broadcast;
-use tracing::{info, warn, error, Level};
+use tracing::{error, info, warn, Level};
 use tracing_subscriber::FmtSubscriber;
 
 use mycelial_core::peer::{PeerId, PeerInfo};
 use mycelial_core::reputation::Reputation;
-use mycelial_network::{NetworkService, NetworkHandle, NetworkConfig, NetworkEvent, Keypair, Libp2pPeerId};
-use mycelial_network::{is_economics_topic, parse_economics_message, EconomicsEvent};
 use mycelial_network::enr_bridge::{
-    EnrMessage, GRADIENT_TOPIC, CREDIT_TOPIC, ELECTION_TOPIC, SEPTAL_TOPIC,
+    EnrMessage, CREDIT_TOPIC, ELECTION_TOPIC, GRADIENT_TOPIC, SEPTAL_TOPIC,
+};
+use mycelial_network::{is_economics_topic, parse_economics_message, EconomicsEvent};
+use mycelial_network::{
+    Keypair, Libp2pPeerId, NetworkConfig, NetworkEvent, NetworkHandle, NetworkService,
 };
 use mycelial_state::SqliteStore;
-use server::messages::{WsMessage, ContributorEntry};
 use server::economics_state::{
-    EconomicsStateManager, CreditLine, Proposal, ProposalStatus, Vouch, Vote, VoteType,
-    ResourceContribution,
+    CreditLine, EconomicsStateManager, Proposal, ProposalStatus, ResourceContribution, Vote,
+    VoteType, Vouch,
 };
+use server::messages::{ContributorEntry, WsMessage};
 
 #[derive(Parser)]
 #[command(name = "mycelial-node")]
@@ -90,17 +92,21 @@ async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
     // Initialize logging
-    let level = if args.verbose { Level::DEBUG } else { Level::INFO };
-    let subscriber = FmtSubscriber::builder()
-        .with_max_level(level)
-        .finish();
+    let level = if args.verbose {
+        Level::DEBUG
+    } else {
+        Level::INFO
+    };
+    let subscriber = FmtSubscriber::builder().with_max_level(level).finish();
     tracing::subscriber::set_global_default(subscriber)?;
 
     // Determine ports based on bootstrap flag and user input
     // Bootstrap nodes: default to 9000/8080 for predictable addresses
     // Peer nodes: default to 0 (OS auto-assigns) for easy multi-node testing
     let p2p_port = args.port.unwrap_or(if args.bootstrap { 9000 } else { 0 });
-    let http_port = args.http_port.unwrap_or(if args.bootstrap { 8080 } else { 0 });
+    let http_port = args
+        .http_port
+        .unwrap_or(if args.bootstrap { 8080 } else { 0 });
 
     info!("Starting Mycelial Node: {}", args.name);
     if args.bootstrap {
@@ -126,7 +132,10 @@ async fn main() -> anyhow::Result<()> {
     let mut config = NetworkConfig::default();
     config.listen_addresses = vec![
         format!("/ip4/0.0.0.0/tcp/{}", p2p_port),
-        format!("/ip4/0.0.0.0/udp/{}/quic-v1", if p2p_port == 0 { 0 } else { p2p_port + 1 }),
+        format!(
+            "/ip4/0.0.0.0/udp/{}/quic-v1",
+            if p2p_port == 0 { 0 } else { p2p_port + 1 }
+        ),
     ];
 
     if p2p_port == 0 {
@@ -141,7 +150,8 @@ async fn main() -> anyhow::Result<()> {
     }
 
     // Create network service
-    let (network_service, network_handle, mut event_rx) = NetworkService::new(keypair.clone(), config)?;
+    let (network_service, network_handle, mut event_rx) =
+        NetworkService::new(keypair.clone(), config)?;
 
     info!("Network service created");
 
@@ -186,8 +196,14 @@ async fn main() -> anyhow::Result<()> {
     let actual_http_port = actual_http_addr.port();
 
     info!("═══════════════════════════════════════════════════════════");
-    info!("  Dashboard server listening on http://127.0.0.1:{}", actual_http_port);
-    info!("  WebSocket endpoint: ws://127.0.0.1:{}/ws", actual_http_port);
+    info!(
+        "  Dashboard server listening on http://127.0.0.1:{}",
+        actual_http_port
+    );
+    info!(
+        "  WebSocket endpoint: ws://127.0.0.1:{}/ws",
+        actual_http_port
+    );
     info!("  REST API: http://127.0.0.1:{}/api/", actual_http_port);
     info!("═══════════════════════════════════════════════════════════");
 
@@ -200,7 +216,10 @@ async fn main() -> anyhow::Result<()> {
 /// Handle events from the P2P network
 async fn handle_network_event(event: NetworkEvent, state: &AppState, local_peer_id: Libp2pPeerId) {
     match event {
-        NetworkEvent::PeerConnected { peer_id, num_connections } => {
+        NetworkEvent::PeerConnected {
+            peer_id,
+            num_connections,
+        } => {
             info!("Peer connected: {} (total: {})", peer_id, num_connections);
 
             let core_peer_id = PeerId(peer_id.to_base58());
@@ -218,7 +237,11 @@ async fn handle_network_event(event: NetworkEvent, state: &AppState, local_peer_
             };
 
             // Store peer with default reputation
-            if let Err(e) = state.store.upsert_peer(&peer_info, Some(&Reputation::default())).await {
+            if let Err(e) = state
+                .store
+                .upsert_peer(&peer_info, Some(&Reputation::default()))
+                .await
+            {
                 warn!("Failed to store peer: {}", e);
             }
 
@@ -229,18 +252,34 @@ async fn handle_network_event(event: NetworkEvent, state: &AppState, local_peer_
             });
         }
 
-        NetworkEvent::PeerDisconnected { peer_id, num_connections } => {
-            info!("Peer disconnected: {} (remaining: {})", peer_id, num_connections);
+        NetworkEvent::PeerDisconnected {
+            peer_id,
+            num_connections,
+        } => {
+            info!(
+                "Peer disconnected: {} (remaining: {})",
+                peer_id, num_connections
+            );
             let _ = state.event_tx.send(WsMessage::PeerLeft {
                 peer_id: peer_id.to_base58(),
             });
         }
 
-        NetworkEvent::MessageReceived { message_id, topic, source, data, timestamp } => {
+        NetworkEvent::MessageReceived {
+            message_id,
+            topic,
+            source,
+            data,
+            timestamp,
+        } => {
             // Update message count
-            state.message_count.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            state
+                .message_count
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
-            let from_id = source.map(|p| p.to_base58()).unwrap_or_else(|| "unknown".to_string());
+            let from_id = source
+                .map(|p| p.to_base58())
+                .unwrap_or_else(|| "unknown".to_string());
             let ts = timestamp.timestamp_millis();
 
             // Check if this is an economics protocol message
@@ -272,7 +311,9 @@ async fn handle_network_event(event: NetworkEvent, state: &AppState, local_peer_
                                 VouchMessage::VouchAck(ack) => {
                                     // Update vouch state and get new reputation
                                     let vouch_id = ack.vouch_id.to_string();
-                                    let new_rep = state.economics.respond_to_vouch(&vouch_id, ack.accepted)
+                                    let new_rep = state
+                                        .economics
+                                        .respond_to_vouch(&vouch_id, ack.accepted)
                                         .map(|v| state.economics.get_reputation(&v.vouchee));
 
                                     let _ = state.event_tx.send(WsMessage::VouchAck {
@@ -321,16 +362,27 @@ async fn handle_network_event(event: NetworkEvent, state: &AppState, local_peer_
                                     // Update credit line balance if exists
                                     // Transfer from debtor to creditor decreases balance
                                     // Transfer from creditor to debtor increases balance
-                                    if let Some(line) = state.economics.get_credit_line_between(&transfer.to, &transfer.from) {
+                                    if let Some(line) = state
+                                        .economics
+                                        .get_credit_line_between(&transfer.to, &transfer.from)
+                                    {
                                         // transfer.from is debtor, transfer.to is creditor
                                         // Debtor paying back - decrease balance
                                         let new_balance = (line.balance - transfer.amount).max(0.0);
-                                        state.economics.update_credit_balance(&line.id, new_balance);
-                                    } else if let Some(line) = state.economics.get_credit_line_between(&transfer.from, &transfer.to) {
+                                        state
+                                            .economics
+                                            .update_credit_balance(&line.id, new_balance);
+                                    } else if let Some(line) = state
+                                        .economics
+                                        .get_credit_line_between(&transfer.from, &transfer.to)
+                                    {
                                         // transfer.from is creditor, transfer.to is debtor
                                         // Extending credit - increase balance
-                                        let new_balance = (line.balance + transfer.amount).min(line.limit);
-                                        state.economics.update_credit_balance(&line.id, new_balance);
+                                        let new_balance =
+                                            (line.balance + transfer.amount).min(line.limit);
+                                        state
+                                            .economics
+                                            .update_credit_balance(&line.id, new_balance);
                                     }
 
                                     let _ = state.event_tx.send(WsMessage::CreditTransfer {
@@ -345,7 +397,11 @@ async fn handle_network_event(event: NetworkEvent, state: &AppState, local_peer_
                                 CreditMessage::LineAck(ack) => {
                                     // LineAck doesn't have creditor/debtor/limit - it's just an ack
                                     // We can skip or send a minimal message
-                                    info!("Credit line {} {}", ack.line_id, if ack.accepted { "accepted" } else { "rejected" });
+                                    info!(
+                                        "Credit line {} {}",
+                                        ack.line_id,
+                                        if ack.accepted { "accepted" } else { "rejected" }
+                                    );
                                 }
                                 CreditMessage::TransferAck(_) | CreditMessage::LineUpdate(_) => {
                                     // Handle additional credit events if needed
@@ -394,19 +450,23 @@ async fn handle_network_event(event: NetworkEvent, state: &AppState, local_peer_
                                     let proposal_id = vote.proposal_id.to_string();
 
                                     // Parse vote type
-                                    let vote_type = match format!("{:?}", vote.vote).to_lowercase().as_str() {
-                                        "yes" => VoteType::Yes,
-                                        "no" => VoteType::No,
-                                        _ => VoteType::Abstain,
-                                    };
+                                    let vote_type =
+                                        match format!("{:?}", vote.vote).to_lowercase().as_str() {
+                                            "yes" => VoteType::Yes,
+                                            "no" => VoteType::No,
+                                            _ => VoteType::Abstain,
+                                        };
 
                                     // Record vote in state
-                                    state.economics.record_vote(&proposal_id, Vote {
-                                        voter: vote.voter.clone(),
-                                        vote_type,
-                                        weight: vote.weight,
-                                        timestamp: ts,
-                                    });
+                                    state.economics.record_vote(
+                                        &proposal_id,
+                                        Vote {
+                                            voter: vote.voter.clone(),
+                                            vote_type,
+                                            weight: vote.weight,
+                                            timestamp: ts,
+                                        },
+                                    );
 
                                     let _ = state.event_tx.send(WsMessage::VoteCast {
                                         id: message_id.to_string(),
@@ -445,13 +505,15 @@ async fn handle_network_event(event: NetworkEvent, state: &AppState, local_peer_
                                     let resource_type = format!("{:?}", contrib.resource_type);
 
                                     // Record contribution in state
-                                    state.economics.record_resource_contribution(ResourceContribution {
-                                        peer_id: contrib.peer_id.clone(),
-                                        resource_type: resource_type.clone(),
-                                        amount: contrib.amount,
-                                        unit: contrib.unit.clone(),
-                                        timestamp: ts,
-                                    });
+                                    state.economics.record_resource_contribution(
+                                        ResourceContribution {
+                                            peer_id: contrib.peer_id.clone(),
+                                            resource_type: resource_type.clone(),
+                                            amount: contrib.amount,
+                                            unit: contrib.unit.clone(),
+                                            timestamp: ts,
+                                        },
+                                    );
 
                                     let _ = state.event_tx.send(WsMessage::ResourceContribution {
                                         id: contrib.id.to_string(),
@@ -463,7 +525,8 @@ async fn handle_network_event(event: NetworkEvent, state: &AppState, local_peer_
                                     });
                                 }
                                 ResourceMessage::PoolUpdate(pool) => {
-                                    let contributors: Vec<ContributorEntry> = pool.top_contributors
+                                    let contributors: Vec<ContributorEntry> = pool
+                                        .top_contributors
                                         .iter()
                                         .map(|c| ContributorEntry {
                                             peer_id: c.peer_id.clone(),
@@ -488,7 +551,11 @@ async fn handle_network_event(event: NetworkEvent, state: &AppState, local_peer_
                 }
             }
             // Check if this is an ENR bridge message
-            else if topic == GRADIENT_TOPIC || topic == CREDIT_TOPIC || topic == ELECTION_TOPIC || topic == SEPTAL_TOPIC {
+            else if topic == GRADIENT_TOPIC
+                || topic == CREDIT_TOPIC
+                || topic == ELECTION_TOPIC
+                || topic == SEPTAL_TOPIC
+            {
                 match EnrMessage::decode(&data) {
                     Ok(enr_msg) => {
                         use mycelial_network::enr_bridge::messages::*;
@@ -526,12 +593,13 @@ async fn handle_network_event(event: NetworkEvent, state: &AppState, local_peer_
                             EnrMessage::Election(election_msg) => {
                                 match election_msg {
                                     ElectionMessage::Announcement(ann) => {
-                                        let _ = state.event_tx.send(WsMessage::ElectionAnnouncement {
-                                            election_id: ann.election_id,
-                                            initiator: ann.initiator.to_string(),
-                                            region_id: ann.region_id,
-                                            timestamp: ann.timestamp.millis as i64,
-                                        });
+                                        let _ =
+                                            state.event_tx.send(WsMessage::ElectionAnnouncement {
+                                                election_id: ann.election_id,
+                                                initiator: ann.initiator.to_string(),
+                                                region_id: ann.region_id,
+                                                timestamp: ann.timestamp.millis as i64,
+                                            });
                                     }
                                     ElectionMessage::Candidacy(candidacy) => {
                                         let _ = state.event_tx.send(WsMessage::ElectionCandidacy {
@@ -578,12 +646,13 @@ async fn handle_network_event(event: NetworkEvent, state: &AppState, local_peer_
                                         // Health probes are internal, no dashboard broadcast
                                     }
                                     SeptalMessage::HealthResponse(resp) => {
-                                        let _ = state.event_tx.send(WsMessage::SeptalHealthStatus {
-                                            node_id: resp.node.to_string(),
-                                            is_healthy: resp.is_healthy,
-                                            failure_count: resp.failure_count,
-                                            timestamp: resp.timestamp.millis as i64,
-                                        });
+                                        let _ =
+                                            state.event_tx.send(WsMessage::SeptalHealthStatus {
+                                                node_id: resp.node.to_string(),
+                                                is_healthy: resp.is_healthy,
+                                                failure_count: resp.failure_count,
+                                                timestamp: resp.timestamp.millis as i64,
+                                            });
                                     }
                                 }
                             }
@@ -595,7 +664,11 @@ async fn handle_network_event(event: NetworkEvent, state: &AppState, local_peer_
                 }
             }
             // Try to parse as chat message (handles chat, content, direct, and room topics)
-            else if topic.contains("chat") || topic.contains("content") || topic.contains("direct") || topic.contains("room") {
+            else if topic.contains("chat")
+                || topic.contains("content")
+                || topic.contains("direct")
+                || topic.contains("room")
+            {
                 if let Ok(content) = String::from_utf8(data.clone()) {
                     let short_from = &from_id[..8.min(from_id.len())];
 
@@ -640,7 +713,10 @@ async fn handle_network_event(event: NetworkEvent, state: &AppState, local_peer_
             state.subscribed_topics.write().retain(|t| t != &topic);
         }
 
-        NetworkEvent::Started { peer_id, listen_addresses: _ } => {
+        NetworkEvent::Started {
+            peer_id,
+            listen_addresses: _,
+        } => {
             info!("Network started for peer: {}", peer_id);
             info!("Listen addresses will be reported as they become available");
         }

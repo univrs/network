@@ -59,7 +59,9 @@ jobs:
 
       - name: Check formatting
         working-directory: univrs-network
-        run: cargo fmt --all -- --check
+        # Use find + rustfmt directly to avoid cargo manifest parsing which fails without path deps
+        run: |
+          find crates -name "*.rs" -type f | xargs rustfmt --check --edition 2021
 
       - name: Run clippy
         working-directory: univrs-network

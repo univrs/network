@@ -7,16 +7,12 @@ use axum::{
 use serde::Serialize;
 use std::sync::Arc;
 
-use crate::AppState;
+use super::economics_state::{CreditLine, EconomicsSummary, Proposal, ResourcePool, Vouch};
 use super::messages::PeerListEntry;
-use super::economics_state::{
-    CreditLine, Proposal, Vouch, ResourcePool, EconomicsSummary,
-};
+use crate::AppState;
 
 /// List all peers
-pub async fn list_peers(
-    State(state): State<Arc<AppState>>,
-) -> Json<Vec<PeerListEntry>> {
+pub async fn list_peers(State(state): State<Arc<AppState>>) -> Json<Vec<PeerListEntry>> {
     let peers = state.store.list_peers().await.unwrap_or_default();
     let entries: Vec<PeerListEntry> = peers.into_iter().map(Into::into).collect();
     Json(entries)
@@ -43,14 +39,14 @@ pub struct NetworkStats {
     pub subscribed_topics: Vec<String>,
 }
 
-pub async fn get_stats(
-    State(state): State<Arc<AppState>>,
-) -> Json<NetworkStats> {
+pub async fn get_stats(State(state): State<Arc<AppState>>) -> Json<NetworkStats> {
     let peers = state.store.list_peers().await.unwrap_or_default();
     Json(NetworkStats {
         local_peer_id: state.local_peer_id.to_string(),
         peer_count: peers.len(),
-        message_count: state.message_count.load(std::sync::atomic::Ordering::Relaxed),
+        message_count: state
+            .message_count
+            .load(std::sync::atomic::Ordering::Relaxed),
         uptime_seconds: state.start_time.elapsed().as_secs(),
         subscribed_topics: state.subscribed_topics.read().clone(),
     })
@@ -69,9 +65,7 @@ pub struct NodeInfo {
     pub peer_id: String,
 }
 
-pub async fn node_info(
-    State(state): State<Arc<AppState>>,
-) -> Json<NodeInfo> {
+pub async fn node_info(State(state): State<Arc<AppState>>) -> Json<NodeInfo> {
     Json(NodeInfo {
         version: env!("CARGO_PKG_VERSION"),
         name: state.node_name.clone(),
@@ -84,16 +78,12 @@ pub async fn node_info(
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// Get economics state summary
-pub async fn get_economics_summary(
-    State(state): State<Arc<AppState>>,
-) -> Json<EconomicsSummary> {
+pub async fn get_economics_summary(State(state): State<Arc<AppState>>) -> Json<EconomicsSummary> {
     Json(state.economics.get_summary())
 }
 
 /// List all credit lines
-pub async fn list_credit_lines(
-    State(state): State<Arc<AppState>>,
-) -> Json<Vec<CreditLine>> {
+pub async fn list_credit_lines(State(state): State<Arc<AppState>>) -> Json<Vec<CreditLine>> {
     Json(state.economics.get_all_credit_lines())
 }
 
@@ -106,16 +96,12 @@ pub async fn get_credit_lines_for_peer(
 }
 
 /// List all proposals
-pub async fn list_proposals(
-    State(state): State<Arc<AppState>>,
-) -> Json<Vec<Proposal>> {
+pub async fn list_proposals(State(state): State<Arc<AppState>>) -> Json<Vec<Proposal>> {
     Json(state.economics.get_all_proposals())
 }
 
 /// List active proposals
-pub async fn list_active_proposals(
-    State(state): State<Arc<AppState>>,
-) -> Json<Vec<Proposal>> {
+pub async fn list_active_proposals(State(state): State<Arc<AppState>>) -> Json<Vec<Proposal>> {
     Json(state.economics.get_active_proposals())
 }
 
@@ -152,9 +138,7 @@ pub async fn get_peer_reputation(
 }
 
 /// Get resource pool
-pub async fn get_resource_pool(
-    State(state): State<Arc<AppState>>,
-) -> Json<ResourcePool> {
+pub async fn get_resource_pool(State(state): State<Arc<AppState>>) -> Json<ResourcePool> {
     Json(state.economics.get_resource_pool())
 }
 

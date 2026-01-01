@@ -4,8 +4,8 @@
 //! and dashboard clients. Includes support for economics protocols (vouch, credit,
 //! governance, resource).
 
-use serde::{Deserialize, Serialize};
 use mycelial_core::peer::PeerInfo;
+use serde::{Deserialize, Serialize};
 
 /// Messages sent from server to client
 #[derive(Debug, Clone, Serialize)]
@@ -18,9 +18,7 @@ pub enum WsMessage {
     },
 
     /// A peer left the network
-    PeerLeft {
-        peer_id: String,
-    },
+    PeerLeft { peer_id: String },
 
     /// A chat message was received
     ChatMessage {
@@ -34,15 +32,10 @@ pub enum WsMessage {
     },
 
     /// A peer's reputation was updated
-    ReputationUpdate {
-        peer_id: String,
-        new_score: f64,
-    },
+    ReputationUpdate { peer_id: String, new_score: f64 },
 
     /// Full list of peers
-    PeersList {
-        peers: Vec<PeerListEntry>,
-    },
+    PeersList { peers: Vec<PeerListEntry> },
 
     /// Network statistics
     Stats {
@@ -52,12 +45,9 @@ pub enum WsMessage {
     },
 
     /// Error message
-    Error {
-        message: String,
-    },
+    Error { message: String },
 
     // ============ Economics Protocol Messages ============
-
     /// Vouch request received
     VouchRequest {
         id: String,
@@ -141,7 +131,6 @@ pub enum WsMessage {
     },
 
     // ============ Room/Seance Messages ============
-
     /// Successfully joined a room
     RoomJoined {
         id: String,
@@ -155,14 +144,10 @@ pub enum WsMessage {
     },
 
     /// Left a room
-    RoomLeft {
-        room_id: String,
-    },
+    RoomLeft { room_id: String },
 
     /// List of available rooms
-    RoomList {
-        rooms: Vec<RoomEntry>,
-    },
+    RoomList { rooms: Vec<RoomEntry> },
 
     /// A peer joined a room
     RoomPeerJoined {
@@ -172,13 +157,9 @@ pub enum WsMessage {
     },
 
     /// A peer left a room
-    RoomPeerLeft {
-        room_id: String,
-        peer_id: String,
-    },
+    RoomPeerLeft { room_id: String, peer_id: String },
 
     // ============ ENR Bridge Messages ============
-
     /// Resource gradient update from a node
     GradientUpdate {
         source: String,
@@ -317,12 +298,9 @@ pub enum ClientMessage {
     GetStats,
 
     /// Subscribe to a topic
-    Subscribe {
-        topic: String,
-    },
+    Subscribe { topic: String },
 
     // ============ Economics Protocol Client Messages ============
-
     /// Request to vouch for another peer
     SendVouch {
         /// Target peer to vouch for
@@ -388,7 +366,6 @@ pub enum ClientMessage {
     },
 
     // ============ Room/Seance Client Messages ============
-
     /// Create a new room
     CreateRoom {
         /// Room ID (optional, generated if not provided)

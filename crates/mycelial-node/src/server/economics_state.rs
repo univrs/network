@@ -150,7 +150,9 @@ impl EconomicsStateManager {
         let peer_key = format!("{}-{}", line.creditor, line.debtor);
         let id = line.id.clone();
 
-        self.credit_lines_by_peers.write().insert(peer_key, id.clone());
+        self.credit_lines_by_peers
+            .write()
+            .insert(peer_key, id.clone());
         self.credit_lines.write().insert(id, line);
     }
 
@@ -416,7 +418,10 @@ impl EconomicsStateManager {
             total_proposal_count: self.proposals.read().len(),
             vouch_count: self.vouches.read().values().filter(|v| v.accepted).count(),
             pending_vouch_count: self.vouches.read().values().filter(|v| !v.accepted).count(),
-            contributor_count: self.resource_pool.read().contributions
+            contributor_count: self
+                .resource_pool
+                .read()
+                .contributions
                 .iter()
                 .map(|c| &c.peer_id)
                 .collect::<std::collections::HashSet<_>>()

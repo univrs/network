@@ -4,7 +4,7 @@
 //! Full OpenRaft types will be added in Sprint 2.
 
 use serde::{Deserialize, Serialize};
-use univrs_enr::core::{AccountId, Credits, CreditTransfer, NodeId, Timestamp};
+use univrs_enr::core::{AccountId, CreditTransfer, Credits, NodeId, Timestamp};
 
 /// Commands that can be proposed to the Raft cluster
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -12,10 +12,7 @@ pub enum CreditCommand {
     /// Transfer credits between accounts
     Transfer(CreditTransfer),
     /// Grant initial credits to a new node
-    GrantCredits {
-        node: NodeId,
-        amount: Credits,
-    },
+    GrantCredits { node: NodeId, amount: Credits },
     /// Record a peer failure (for septal gate integration)
     RecordFailure {
         node: NodeId,

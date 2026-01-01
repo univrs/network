@@ -2,5 +2,5 @@
 //!
 //! These tests verify end-to-end behavior of the node components.
 
-mod websocket_messages;
 mod rest_api;
+mod websocket_messages;

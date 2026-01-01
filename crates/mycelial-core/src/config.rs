@@ -337,6 +337,9 @@ mod tests {
         let json = serde_json::to_string_pretty(&config).unwrap();
         let recovered: NodeConfig = serde_json::from_str(&json).unwrap();
 
-        assert_eq!(config.network.max_connections, recovered.network.max_connections);
+        assert_eq!(
+            config.network.max_connections,
+            recovered.network.max_connections
+        );
     }
 }

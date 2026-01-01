@@ -3,12 +3,12 @@
 //! Events are the primary mechanism for communication between modules
 //! and for notifying the network of state changes.
 
-use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::identity::{Did, SignatureBytes};
 use crate::content::ContentId;
+use crate::identity::{Did, SignatureBytes};
 use crate::peer::PeerId;
 
 /// A network event that can be published and subscribed to
@@ -53,7 +53,11 @@ impl Event {
 
     /// Create a reputation event
     pub fn reputation(source: PeerId, payload: ReputationEvent) -> Self {
-        Self::new(EventType::Reputation, source, EventPayload::Reputation(payload))
+        Self::new(
+            EventType::Reputation,
+            source,
+            EventPayload::Reputation(payload),
+        )
     }
 
     /// Create a credit event
@@ -63,7 +67,11 @@ impl Event {
 
     /// Create a governance event
     pub fn governance(source: PeerId, payload: GovernanceEvent) -> Self {
-        Self::new(EventType::Governance, source, EventPayload::Governance(payload))
+        Self::new(
+            EventType::Governance,
+            source,
+            EventPayload::Governance(payload),
+        )
     }
 }
 
@@ -106,9 +114,7 @@ pub enum SystemEvent {
         addresses: Vec<String>,
     },
     /// A peer left the network
-    PeerLeft {
-        peer_id: PeerId,
-    },
+    PeerLeft { peer_id: PeerId },
     /// Peer health heartbeat
     Heartbeat {
         peer_id: PeerId,
@@ -139,10 +145,7 @@ pub enum ContentEvent {
         author: Did,
     },
     /// Content was deleted
-    Deleted {
-        content_id: ContentId,
-        author: Did,
-    },
+    Deleted { content_id: ContentId, author: Did },
     /// Content was pinned by a peer
     Pinned {
         content_id: ContentId,
@@ -170,17 +173,9 @@ pub enum ReputationEvent {
         reason: String,
     },
     /// Positive feedback was given
-    PositiveFeedback {
-        from: Did,
-        to: Did,
-        context: String,
-    },
+    PositiveFeedback { from: Did, to: Did, context: String },
     /// Negative feedback was given
-    NegativeFeedback {
-        from: Did,
-        to: Did,
-        context: String,
-    },
+    NegativeFeedback { from: Did, to: Did, context: String },
     /// Trust threshold was crossed
     TrustThresholdCrossed {
         subject: Did,
@@ -244,10 +239,7 @@ pub enum GovernanceEvent {
         result: ProposalResult,
     },
     /// Proposal was cancelled
-    ProposalCancelled {
-        proposal_id: Uuid,
-        reason: String,
-    },
+    ProposalCancelled { proposal_id: Uuid, reason: String },
 }
 
 /// Orchestration events
@@ -261,10 +253,7 @@ pub enum OrchestrationEvent {
         deadline: Option<DateTime<Utc>>,
     },
     /// Task execution started
-    TaskStarted {
-        task_id: Uuid,
-        executor: Did,
-    },
+    TaskStarted { task_id: Uuid, executor: Did },
     /// Task was completed
     TaskCompleted {
         task_id: Uuid,

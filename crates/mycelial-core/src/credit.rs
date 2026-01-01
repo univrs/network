@@ -1,8 +1,8 @@
 //! Mutual credit and economic relationships
 
-use serde::{Deserialize, Serialize};
-use chrono::{DateTime, Utc};
 use crate::peer::PeerId;
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 
 /// A credit relationship between two peers
 #[derive(Debug, Clone, Serialize, Deserialize)]

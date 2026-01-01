@@ -76,7 +76,11 @@ impl SqliteStore {
     // ========== Peer Operations ==========
 
     /// Store or update a peer
-    pub async fn upsert_peer(&self, info: &PeerInfo, reputation: Option<&Reputation>) -> Result<()> {
+    pub async fn upsert_peer(
+        &self,
+        info: &PeerInfo,
+        reputation: Option<&Reputation>,
+    ) -> Result<()> {
         let peer_id = info.id.as_str();
         let public_key = &info.public_key;
         let addresses_json = serde_json::to_string(&info.addresses)?;
@@ -202,7 +206,11 @@ impl SqliteStore {
     }
 
     /// Update peer reputation
-    pub async fn update_peer_reputation(&self, peer_id: &str, reputation: &Reputation) -> Result<()> {
+    pub async fn update_peer_reputation(
+        &self,
+        peer_id: &str,
+        reputation: &Reputation,
+    ) -> Result<()> {
         let history_json = serde_json::to_string(&reputation.history)?;
 
         let result = sqlx::query(
@@ -277,12 +285,11 @@ impl SqliteStore {
     fn row_to_peer_info(&self, row: &sqlx::sqlite::SqliteRow) -> Result<PeerInfo> {
         let peer_id: String = row.get("peer_id");
         // public_key is now stored as base58 string (TEXT), with fallback for legacy BLOB
-        let public_key: String = row.try_get::<String, _>("public_key")
-            .unwrap_or_else(|_| {
-                // Fallback: try reading as BLOB and convert to base58
-                let bytes: Vec<u8> = row.get("public_key");
-                bs58::encode(&bytes).into_string()
-            });
+        let public_key: String = row.try_get::<String, _>("public_key").unwrap_or_else(|_| {
+            // Fallback: try reading as BLOB and convert to base58
+            let bytes: Vec<u8> = row.get("public_key");
+            bs58::encode(&bytes).into_string()
+        });
         let display_name: Option<String> = row.get("display_name");
         let addresses_json: String = row.get("addresses_json");
         let first_seen: i64 = row.get("first_seen");
@@ -295,8 +302,14 @@ impl SqliteStore {
             id: PeerId(peer_id),
             public_key,
             addresses,
-            first_seen: Utc.timestamp_opt(first_seen, 0).single().unwrap_or_else(Utc::now),
-            last_seen: Utc.timestamp_opt(last_seen, 0).single().unwrap_or_else(Utc::now),
+            first_seen: Utc
+                .timestamp_opt(first_seen, 0)
+                .single()
+                .unwrap_or_else(Utc::now),
+            last_seen: Utc
+                .timestamp_opt(last_seen, 0)
+                .single()
+                .unwrap_or_else(Utc::now),
             name: display_name,
         })
     }
@@ -412,7 +425,11 @@ impl SqliteStore {
     }
 
     /// List messages by type
-    pub async fn list_messages_by_type(&self, message_type: &MessageType, limit: i64) -> Result<Vec<Message>> {
+    pub async fn list_messages_by_type(
+        &self,
+        message_type: &MessageType,
+        limit: i64,
+    ) -> Result<Vec<Message>> {
         let type_str = format!("{:?}", message_type);
 
         let rows = sqlx::query(
@@ -479,7 +496,10 @@ impl SqliteStore {
             sender: PeerId(sender),
             recipient: recipient.map(PeerId),
             payload,
-            timestamp: Utc.timestamp_opt(timestamp, 0).single().unwrap_or_else(Utc::now),
+            timestamp: Utc
+                .timestamp_opt(timestamp, 0)
+                .single()
+                .unwrap_or_else(Utc::now),
             signature,
         })
     }
@@ -569,7 +589,10 @@ impl SqliteStore {
     }
 
     /// List all credit relationships for a peer (as creditor or debtor)
-    pub async fn list_credit_relationships_for(&self, peer_id: &str) -> Result<Vec<CreditRelationship>> {
+    pub async fn list_credit_relationships_for(
+        &self,
+        peer_id: &str,
+    ) -> Result<Vec<CreditRelationship>> {
         let rows = sqlx::query(
             r#"
             SELECT id, creditor_peer_id, debtor_peer_id, credit_limit, balance,
@@ -644,7 +667,10 @@ impl SqliteStore {
     }
 
     // Helper to convert row to CreditRelationship
-    fn row_to_credit_relationship(&self, row: &sqlx::sqlite::SqliteRow) -> Result<CreditRelationship> {
+    fn row_to_credit_relationship(
+        &self,
+        row: &sqlx::sqlite::SqliteRow,
+    ) -> Result<CreditRelationship> {
         let creditor: String = row.get("creditor_peer_id");
         let debtor: String = row.get("debtor_peer_id");
         let credit_limit: f64 = row.get("credit_limit");
@@ -659,8 +685,14 @@ impl SqliteStore {
             credit_limit,
             balance,
             active: active != 0,
-            established: Utc.timestamp_opt(established, 0).single().unwrap_or_else(Utc::now),
-            last_transaction: Utc.timestamp_opt(last_transaction, 0).single().unwrap_or_else(Utc::now),
+            established: Utc
+                .timestamp_opt(established, 0)
+                .single()
+                .unwrap_or_else(Utc::now),
+            last_transaction: Utc
+                .timestamp_opt(last_transaction, 0)
+                .single()
+                .unwrap_or_else(Utc::now),
         })
     }
 
@@ -771,7 +803,10 @@ mod tests {
         let reputation = Reputation::new(0.75);
 
         // Store peer
-        store.upsert_peer(&peer_info, Some(&reputation)).await.unwrap();
+        store
+            .upsert_peer(&peer_info, Some(&reputation))
+            .await
+            .unwrap();
 
         // Retrieve peer
         let (retrieved, rep) = store.get_peer("test_peer_123").await.unwrap().unwrap();
@@ -805,7 +840,11 @@ mod tests {
         store.upsert_peer(&sender_info, None).await.unwrap();
 
         // Create message
-        let message = Message::new(MessageType::Content, sender.clone(), b"Hello, world!".to_vec());
+        let message = Message::new(
+            MessageType::Content,
+            sender.clone(),
+            b"Hello, world!".to_vec(),
+        );
         let msg_id = message.id;
 
         // Store message
@@ -857,7 +896,11 @@ mod tests {
         let rel_id = store.upsert_credit_relationship(&rel).await.unwrap();
 
         // Retrieve relationship
-        let retrieved = store.get_credit_relationship(&rel_id).await.unwrap().unwrap();
+        let retrieved = store
+            .get_credit_relationship(&rel_id)
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!(retrieved.creditor.as_str(), "creditor_peer");
         assert_eq!(retrieved.debtor.as_str(), "debtor_peer");
         assert_eq!(retrieved.credit_limit, 100.0);
@@ -872,7 +915,10 @@ mod tests {
         assert!(retrieved.active);
 
         // List for peer
-        let rels = store.list_credit_relationships_for("creditor_peer").await.unwrap();
+        let rels = store
+            .list_credit_relationships_for("creditor_peer")
+            .await
+            .unwrap();
         assert_eq!(rels.len(), 1);
     }
 
@@ -881,7 +927,10 @@ mod tests {
         let store = create_test_store().await;
 
         // Set value
-        store.set_sync_value("test_key", b"test_value").await.unwrap();
+        store
+            .set_sync_value("test_key", b"test_value")
+            .await
+            .unwrap();
 
         // Get value
         let (value, version) = store.get_sync_value("test_key").await.unwrap().unwrap();
@@ -889,7 +938,10 @@ mod tests {
         assert_eq!(version, 1);
 
         // Update value
-        store.set_sync_value("test_key", b"updated_value").await.unwrap();
+        store
+            .set_sync_value("test_key", b"updated_value")
+            .await
+            .unwrap();
         let (value, version) = store.get_sync_value("test_key").await.unwrap().unwrap();
         assert_eq!(value, b"updated_value");
         assert_eq!(version, 2);
@@ -923,7 +975,10 @@ mod tests {
             };
             let reputation = Reputation::new(0.2 + (i as f64 * 0.15)); // 0.2, 0.35, 0.5, 0.65, 0.8
 
-            store.upsert_peer(&peer_info, Some(&reputation)).await.unwrap();
+            store
+                .upsert_peer(&peer_info, Some(&reputation))
+                .await
+                .unwrap();
         }
 
         // Get trusted peers (threshold 0.5)

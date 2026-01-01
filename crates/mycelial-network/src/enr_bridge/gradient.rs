@@ -63,8 +63,7 @@ impl GradientBroadcaster {
         let msg = EnrMessage::GradientUpdate(update);
         let bytes = msg.encode().map_err(BroadcastError::Encode)?;
 
-        (self.publish_fn)(GRADIENT_TOPIC.to_string(), bytes)
-            .map_err(BroadcastError::Publish)?;
+        (self.publish_fn)(GRADIENT_TOPIC.to_string(), bytes).map_err(BroadcastError::Publish)?;
 
         debug!(
             cpu = %gradient.cpu_available,
@@ -139,10 +138,22 @@ impl GradientBroadcaster {
         let count = fresh.len() as f64;
         ResourceGradient {
             cpu_available: fresh.iter().map(|g| g.gradient.cpu_available).sum::<f64>() / count,
-            memory_available: fresh.iter().map(|g| g.gradient.memory_available).sum::<f64>() / count,
+            memory_available: fresh
+                .iter()
+                .map(|g| g.gradient.memory_available)
+                .sum::<f64>()
+                / count,
             gpu_available: fresh.iter().map(|g| g.gradient.gpu_available).sum::<f64>() / count,
-            storage_available: fresh.iter().map(|g| g.gradient.storage_available).sum::<f64>() / count,
-            bandwidth_available: fresh.iter().map(|g| g.gradient.bandwidth_available).sum::<f64>() / count,
+            storage_available: fresh
+                .iter()
+                .map(|g| g.gradient.storage_available)
+                .sum::<f64>()
+                / count,
+            bandwidth_available: fresh
+                .iter()
+                .map(|g| g.gradient.bandwidth_available)
+                .sum::<f64>()
+                / count,
             credit_balance: fresh.iter().map(|g| g.gradient.credit_balance).sum::<f64>() / count,
         }
     }
@@ -178,9 +189,8 @@ impl GradientBroadcaster {
         let now = Timestamp::now();
         let before_count = gradients.len();
 
-        gradients.retain(|_, g| {
-            now.millis.saturating_sub(g.timestamp.millis) < MAX_GRADIENT_AGE_MS * 2
-        });
+        gradients
+            .retain(|_, g| now.millis.saturating_sub(g.timestamp.millis) < MAX_GRADIENT_AGE_MS * 2);
 
         before_count - gradients.len()
     }
@@ -211,7 +221,10 @@ mod tests {
     use super::*;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
-    fn mock_publish() -> (impl Fn(String, Vec<u8>) -> Result<(), String> + Clone, Arc<AtomicUsize>) {
+    fn mock_publish() -> (
+        impl Fn(String, Vec<u8>) -> Result<(), String> + Clone,
+        Arc<AtomicUsize>,
+    ) {
         let counter = Arc::new(AtomicUsize::new(0));
         let c = counter.clone();
         let f = move |_topic: String, _bytes: Vec<u8>| {

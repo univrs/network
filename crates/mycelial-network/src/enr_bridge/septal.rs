@@ -41,8 +41,8 @@ use tracing::{debug, info, warn};
 use univrs_enr::{
     core::{NodeId, Timestamp},
     septal::{
-        RecoveryResult, SeptalGate, SeptalGateConfig, SeptalGateState,
-        SeptalGateTransition, WoroninManager, FAILURE_THRESHOLD,
+        RecoveryResult, SeptalGate, SeptalGateConfig, SeptalGateState, SeptalGateTransition,
+        WoroninManager, FAILURE_THRESHOLD,
     },
 };
 
@@ -362,22 +362,18 @@ impl SeptalGateManager {
     /// Handle incoming septal message from gossip
     pub async fn handle_message(&self, msg: SeptalMessage) -> Result<(), SeptalError> {
         match msg {
-            SeptalMessage::StateChange(state_msg) => {
-                self.handle_state_change(state_msg).await
-            }
-            SeptalMessage::HealthProbe(probe) => {
-                self.handle_health_probe(probe).await
-            }
-            SeptalMessage::HealthResponse(response) => {
-                self.handle_health_response(response).await
-            }
+            SeptalMessage::StateChange(state_msg) => self.handle_state_change(state_msg).await,
+            SeptalMessage::HealthProbe(probe) => self.handle_health_probe(probe).await,
+            SeptalMessage::HealthResponse(response) => self.handle_health_response(response).await,
         }
     }
 
     /// Handle state change from another node
     async fn handle_state_change(&self, msg: SeptalStateMsg) -> Result<(), SeptalError> {
         let mut gates = self.gates.write();
-        let gate = gates.entry(msg.node).or_insert_with(|| SeptalGate::new(msg.node));
+        let gate = gates
+            .entry(msg.node)
+            .or_insert_with(|| SeptalGate::new(msg.node));
 
         // Apply the state change
         gate.state = msg.to_state;
@@ -422,14 +418,16 @@ impl SeptalGateManager {
 
         let msg = EnrMessage::Septal(SeptalMessage::HealthResponse(response));
         let bytes = msg.encode().map_err(|_| SeptalError::EncodeFailed)?;
-        (self.publish_fn)(SEPTAL_TOPIC.to_string(), bytes)
-            .map_err(SeptalError::PublishFailed)?;
+        (self.publish_fn)(SEPTAL_TOPIC.to_string(), bytes).map_err(SeptalError::PublishFailed)?;
 
         Ok(())
     }
 
     /// Handle health response
-    async fn handle_health_response(&self, response: SeptalHealthResponse) -> Result<(), SeptalError> {
+    async fn handle_health_response(
+        &self,
+        response: SeptalHealthResponse,
+    ) -> Result<(), SeptalError> {
         if response.is_healthy {
             // Reset failure count for healthy peer
             let mut gates = self.gates.write();
@@ -479,8 +477,7 @@ impl SeptalGateManager {
 
         let msg = EnrMessage::Septal(SeptalMessage::HealthProbe(probe));
         let bytes = msg.encode().map_err(|_| SeptalError::EncodeFailed)?;
-        (self.publish_fn)(SEPTAL_TOPIC.to_string(), bytes)
-            .map_err(SeptalError::PublishFailed)?;
+        (self.publish_fn)(SEPTAL_TOPIC.to_string(), bytes).map_err(SeptalError::PublishFailed)?;
 
         Ok(())
     }
@@ -529,8 +526,10 @@ mod tests {
     use super::*;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
-    fn mock_publish() -> (impl Fn(String, Vec<u8>) -> Result<(), String> + Clone, Arc<AtomicUsize>)
-    {
+    fn mock_publish() -> (
+        impl Fn(String, Vec<u8>) -> Result<(), String> + Clone,
+        Arc<AtomicUsize>,
+    ) {
         let counter = Arc::new(AtomicUsize::new(0));
         let c = counter.clone();
         let f = move |_topic: String, _bytes: Vec<u8>| {
@@ -667,10 +666,7 @@ mod tests {
 
         // Should be isolated now
         assert!(manager.is_isolated(&peer).await);
-        assert_eq!(
-            manager.get_gate_state(&peer).await,
-            SeptalGateState::Closed
-        );
+        assert_eq!(manager.get_gate_state(&peer).await, SeptalGateState::Closed);
     }
 
     #[tokio::test]

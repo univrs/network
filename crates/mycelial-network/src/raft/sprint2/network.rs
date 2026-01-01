@@ -136,7 +136,11 @@ impl RaftNetwork<CreditTypeConfig> for GossipsubRaftNetworkConnection {
         rpc: AppendEntriesRequest<CreditTypeConfig>,
         _option: RPCOption,
     ) -> Result<AppendEntriesResponse<u64>, RPCError<u64, BasicNode, OpenRaftError<u64>>> {
-        debug!(target = self.target, entries = rpc.entries.len(), "Sending AppendEntries");
+        debug!(
+            target = self.target,
+            entries = rpc.entries.len(),
+            "Sending AppendEntries"
+        );
 
         self.network
             .publish(RaftMessage::AppendEntries(rpc))
@@ -158,7 +162,11 @@ impl RaftNetwork<CreditTypeConfig> for GossipsubRaftNetworkConnection {
         rpc: VoteRequest<u64>,
         _option: RPCOption,
     ) -> Result<VoteResponse<u64>, RPCError<u64, BasicNode, OpenRaftError<u64>>> {
-        debug!(target = self.target, candidate = rpc.vote.leader_id.node_id, "Sending Vote");
+        debug!(
+            target = self.target,
+            candidate = rpc.vote.leader_id.node_id,
+            "Sending Vote"
+        );
 
         self.network
             .publish(RaftMessage::Vote(rpc.clone()))
@@ -194,9 +202,7 @@ impl RaftNetwork<CreditTypeConfig> for GossipsubRaftNetworkConnection {
             .map_err(|e| RPCError::Network(openraft::error::NetworkError::new(&e)))?;
 
         // TODO: Wait for response with timeout
-        Ok(InstallSnapshotResponse {
-            vote: rpc.vote,
-        })
+        Ok(InstallSnapshotResponse { vote: rpc.vote })
     }
 }
 

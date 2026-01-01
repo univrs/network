@@ -12,17 +12,17 @@ use axum::{
 };
 use futures::{SinkExt, StreamExt};
 use std::sync::Arc;
-use tracing::{info, warn, error};
+use tracing::{error, info, warn};
 use uuid::Uuid;
 
+use super::messages::{ClientMessage, PeerListEntry, WsMessage};
 use crate::AppState;
-use super::messages::{WsMessage, ClientMessage, PeerListEntry};
 use mycelial_protocol::{
-    topics,
-    VouchMessage, VouchRequest, VouchAck as ProtocolVouchAck,
-    CreditMessage, CreateCreditLine as ProtocolCreateCreditLine, CreditTransfer as ProtocolCreditTransfer,
-    GovernanceMessage, CreateProposal as ProtocolCreateProposal, CastVote as ProtocolCastVote, Vote,
-    ResourceMessage, ResourceContribution as ProtocolResourceContribution, ResourceType,
+    topics, CastVote as ProtocolCastVote, CreateCreditLine as ProtocolCreateCreditLine,
+    CreateProposal as ProtocolCreateProposal, CreditMessage,
+    CreditTransfer as ProtocolCreditTransfer, GovernanceMessage,
+    ResourceContribution as ProtocolResourceContribution, ResourceMessage, ResourceType, Vote,
+    VouchAck as ProtocolVouchAck, VouchMessage, VouchRequest,
 };
 
 /// Handle WebSocket upgrade
@@ -102,8 +102,15 @@ async fn handle_client_message(msg: ClientMessage, state: &AppState) {
     info!("Received client message: {:?}", msg);
 
     match msg {
-        ClientMessage::SendChat { content, to, room_id } => {
-            info!("SendChat: content='{}', to={:?}, room_id={:?}", content, to, room_id);
+        ClientMessage::SendChat {
+            content,
+            to,
+            room_id,
+        } => {
+            info!(
+                "SendChat: content='{}', to={:?}, room_id={:?}",
+                content, to, room_id
+            );
 
             // Generate message ID and timestamp for local echo
             let message_id = Uuid::new_v4().to_string();
@@ -173,7 +180,9 @@ async fn handle_client_message(msg: ClientMessage, state: &AppState) {
         ClientMessage::GetStats => {
             let stats = WsMessage::Stats {
                 peer_count: state.store.list_peers().await.map(|p| p.len()).unwrap_or(0),
-                message_count: state.message_count.load(std::sync::atomic::Ordering::Relaxed),
+                message_count: state
+                    .message_count
+                    .load(std::sync::atomic::Ordering::Relaxed),
                 uptime_seconds: state.start_time.elapsed().as_secs(),
             };
             let _ = state.event_tx.send(stats);
@@ -186,8 +195,11 @@ async fn handle_client_message(msg: ClientMessage, state: &AppState) {
         }
 
         // ============ Economics Protocol Handlers ============
-
-        ClientMessage::SendVouch { vouchee, weight, message } => {
+        ClientMessage::SendVouch {
+            vouchee,
+            weight,
+            message,
+        } => {
             info!("SendVouch: vouchee='{}', weight={}", vouchee, weight);
 
             let timestamp = chrono::Utc::now().timestamp_millis();
@@ -230,7 +242,10 @@ async fn handle_client_message(msg: ClientMessage, state: &AppState) {
         }
 
         ClientMessage::RespondVouch { request_id, accept } => {
-            info!("RespondVouch: request_id='{}', accept={}", request_id, accept);
+            info!(
+                "RespondVouch: request_id='{}', accept={}",
+                request_id, accept
+            );
 
             let timestamp = chrono::Utc::now().timestamp_millis();
 
@@ -347,7 +362,11 @@ async fn handle_client_message(msg: ClientMessage, state: &AppState) {
             }
         }
 
-        ClientMessage::CreateProposal { title, description, proposal_type } => {
+        ClientMessage::CreateProposal {
+            title,
+            description,
+            proposal_type,
+        } => {
             info!("CreateProposal: title='{}'", title);
 
             let timestamp = chrono::Utc::now().timestamp_millis();
@@ -435,8 +454,15 @@ async fn handle_client_message(msg: ClientMessage, state: &AppState) {
             }
         }
 
-        ClientMessage::ReportResource { resource_type, amount, unit } => {
-            info!("ReportResource: type='{}', amount={}", resource_type, amount);
+        ClientMessage::ReportResource {
+            resource_type,
+            amount,
+            unit,
+        } => {
+            info!(
+                "ReportResource: type='{}', amount={}",
+                resource_type, amount
+            );
 
             let timestamp = chrono::Utc::now().timestamp_millis();
 
@@ -477,9 +503,16 @@ async fn handle_client_message(msg: ClientMessage, state: &AppState) {
         }
 
         // ============ Room/Seance Handlers ============
-
-        ClientMessage::CreateRoom { room_id, room_name, description, is_public } => {
-            info!("CreateRoom: name='{}', is_public={:?}", room_name, is_public);
+        ClientMessage::CreateRoom {
+            room_id,
+            room_name,
+            description,
+            is_public,
+        } => {
+            info!(
+                "CreateRoom: name='{}', is_public={:?}",
+                room_name, is_public
+            );
 
             let timestamp = chrono::Utc::now().timestamp_millis();
             let id = room_id.unwrap_or_else(|| Uuid::new_v4().to_string());
@@ -512,7 +545,10 @@ async fn handle_client_message(msg: ClientMessage, state: &AppState) {
             let _ = state.event_tx.send(room_msg);
         }
 
-        ClientMessage::JoinRoom { room_id, room_name: _ } => {
+        ClientMessage::JoinRoom {
+            room_id,
+            room_name: _,
+        } => {
             info!("JoinRoom: room_id='{}'", room_id);
 
             let timestamp = chrono::Utc::now().timestamp_millis();
