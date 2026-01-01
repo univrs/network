@@ -47,7 +47,7 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
             let entries: Vec<PeerListEntry> = peers.into_iter().map(Into::into).collect();
             let init_msg = WsMessage::PeersList { peers: entries };
             if let Ok(json) = serde_json::to_string(&init_msg) {
-                let _ = sender.send(Message::Text(json.into())).await;
+                let _ = sender.send(Message::Text(json)).await;
             }
         }
         Err(e) => {
@@ -59,7 +59,7 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
     let mut send_task = tokio::spawn(async move {
         while let Ok(event) = event_rx.recv().await {
             if let Ok(json) = serde_json::to_string(&event) {
-                if sender.send(Message::Text(json.into())).await.is_err() {
+                if sender.send(Message::Text(json)).await.is_err() {
                     break;
                 }
             }
@@ -634,6 +634,117 @@ async fn handle_client_message(msg: ClientMessage, state: &AppState) {
             // In a full implementation, we'd query a room registry or DHT
             let rooms_msg = WsMessage::RoomList { rooms: vec![] };
             let _ = state.event_tx.send(rooms_msg);
+        }
+
+        // ============ ENR Bridge Handlers ============
+        ClientMessage::ReportGradient {
+            cpu_available,
+            memory_available,
+            bandwidth_available,
+            storage_available,
+        } => {
+            info!(
+                "ReportGradient: cpu={}, mem={}, bw={}, storage={}",
+                cpu_available, memory_available, bandwidth_available, storage_available
+            );
+
+            let timestamp = chrono::Utc::now().timestamp_millis();
+
+            // Broadcast gradient update to all clients
+            let gradient_msg = WsMessage::GradientUpdate {
+                source: state.local_peer_id.to_string(),
+                cpu_available,
+                memory_available,
+                bandwidth_available,
+                storage_available,
+                timestamp,
+            };
+            let _ = state.event_tx.send(gradient_msg);
+        }
+
+        ClientMessage::StartElection { region_id } => {
+            info!("StartElection: region_id='{}'", region_id);
+
+            let timestamp = chrono::Utc::now().timestamp_millis();
+            let election_id = timestamp as u64; // Simple ID generation
+
+            let election_msg = WsMessage::ElectionAnnouncement {
+                election_id,
+                initiator: state.local_peer_id.to_string(),
+                region_id,
+                timestamp,
+            };
+            let _ = state.event_tx.send(election_msg);
+        }
+
+        ClientMessage::RegisterCandidacy {
+            election_id,
+            uptime,
+            cpu_available,
+            memory_available,
+            reputation,
+        } => {
+            info!("RegisterCandidacy: election_id={}", election_id);
+
+            let timestamp = chrono::Utc::now().timestamp_millis();
+
+            let candidacy_msg = WsMessage::ElectionCandidacy {
+                election_id,
+                candidate: state.local_peer_id.to_string(),
+                uptime,
+                cpu_available,
+                memory_available,
+                reputation,
+                timestamp,
+            };
+            let _ = state.event_tx.send(candidacy_msg);
+        }
+
+        ClientMessage::VoteElection {
+            election_id,
+            candidate,
+        } => {
+            info!(
+                "VoteElection: election_id={}, candidate='{}'",
+                election_id, candidate
+            );
+
+            let timestamp = chrono::Utc::now().timestamp_millis();
+
+            let vote_msg = WsMessage::ElectionVote {
+                election_id,
+                voter: state.local_peer_id.to_string(),
+                candidate,
+                timestamp,
+            };
+            let _ = state.event_tx.send(vote_msg);
+        }
+
+        ClientMessage::SendEnrCredit { to, amount } => {
+            info!("SendEnrCredit: to='{}', amount={}", to, amount);
+
+            let timestamp = chrono::Utc::now().timestamp_millis();
+            static NONCE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+            let nonce = NONCE.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            let tax = amount / 100; // 1% tax
+
+            let transfer_msg = WsMessage::EnrCreditTransfer {
+                from: state.local_peer_id.to_string(),
+                to: to.clone(),
+                amount,
+                tax,
+                nonce,
+                timestamp,
+            };
+            let _ = state.event_tx.send(transfer_msg);
+
+            // Update sender's balance (decrease)
+            let balance_msg = WsMessage::EnrBalanceUpdate {
+                node_id: state.local_peer_id.to_string(),
+                balance: 0, // Placeholder - real impl would track actual balance
+                timestamp,
+            };
+            let _ = state.event_tx.send(balance_msg);
         }
     }
 }

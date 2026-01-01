@@ -52,6 +52,12 @@ function App() {
     enrTransfers,
     nodeEnrStates,
     elections,
+    // ENR Bridge functions
+    reportGradient,
+    startElection,
+    registerCandidacy,
+    voteElection,
+    sendEnrCredit,
     // Economics functions
     sendVouch,
     sendCreditLine,
@@ -481,6 +487,7 @@ function App() {
         <GradientPanel
           gradients={gradients}
           nodeEnrStates={nodeEnrStates}
+          onReportGradient={reportGradient}
           onClose={() => setShowGradients(false)}
         />
       )}
@@ -489,6 +496,9 @@ function App() {
         <ElectionPanel
           elections={elections}
           localPeerId={localPeerId}
+          onStartElection={startElection}
+          onRegisterCandidacy={registerCandidacy}
+          onVoteElection={voteElection}
           onClose={() => setShowElections(false)}
         />
       )}
@@ -505,6 +515,7 @@ function App() {
           nodeEnrStates={nodeEnrStates}
           enrTransfers={enrTransfers}
           localPeerId={localPeerId}
+          onSendEnrCredit={sendEnrCredit}
           onClose={() => setShowEnrCredits(false)}
         />
       )}

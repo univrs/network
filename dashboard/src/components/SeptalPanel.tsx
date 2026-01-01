@@ -1,8 +1,15 @@
 // src/components/SeptalPanel.tsx
 // Displays septal gate (circuit breaker) states across the network
 
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import type { NodeEnrState, SeptalState } from '@/types';
+
+// Tooltip descriptions for each circuit breaker state
+const SEPTAL_STATE_TOOLTIPS: Record<SeptalState, string> = {
+  closed: 'Circuit is closed and operating normally. All requests are allowed through.',
+  half_open: 'Circuit is testing recovery. Limited requests allowed to check if the service has recovered.',
+  open: 'Circuit is tripped due to failures. Requests are blocked to prevent cascade failures.',
+};
 
 interface SeptalPanelProps {
   nodeEnrStates: Map<string, NodeEnrState>;
@@ -70,22 +77,58 @@ function getSeptalStateConfig(state: SeptalState): {
   }
 }
 
+// Tooltip component for hover information
+function Tooltip({ children, content }: { children: React.ReactNode; content: string }) {
+  const [show, setShow] = useState(false);
+
+  return (
+    <div
+      className="relative inline-block"
+      onMouseEnter={() => setShow(true)}
+      onMouseLeave={() => setShow(false)}
+    >
+      {children}
+      {show && (
+        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 pointer-events-none">
+          <div className="bg-deep-earth border border-border-subtle rounded-lg px-3 py-2 text-xs text-mycelium-white shadow-lg whitespace-nowrap max-w-xs">
+            {content}
+          </div>
+          <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1">
+            <div className="border-4 border-transparent border-t-deep-earth" />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SeptalGateIndicator({ state }: { state: SeptalState }) {
   const config = getSeptalStateConfig(state);
 
   return (
-    <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full ${config.bgColor}`}>
-      <span className={config.color}>{config.icon}</span>
-      <span className={`text-sm font-display ${config.color}`}>{config.label}</span>
-    </div>
+    <Tooltip content={SEPTAL_STATE_TOOLTIPS[state]}>
+      <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full ${config.bgColor} cursor-help`}>
+        <span className={config.color}>{config.icon}</span>
+        <span className={`text-sm font-display ${config.color}`}>{config.label}</span>
+      </div>
+    </Tooltip>
   );
 }
 
 function NodeSeptalCard({ state }: { state: NodeEnrState }) {
   const config = getSeptalStateConfig(state.septalState);
+  const isOpen = state.septalState === 'open';
 
   return (
-    <div className="p-4 bg-moss rounded-lg">
+    <div className={`p-4 bg-moss rounded-lg relative overflow-hidden ${
+      isOpen ? 'ring-1 ring-red-400/50 animate-[pulse-glow_2s_ease-in-out_infinite]' : ''
+    }`} style={isOpen ? {
+      animation: 'pulse-glow 2s ease-in-out infinite',
+    } : undefined}>
+      {/* Attention overlay for open circuits */}
+      {isOpen && (
+        <div className="absolute inset-0 bg-gradient-to-r from-red-500/5 to-red-500/10 pointer-events-none animate-pulse" />
+      )}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-3">
           <div className={`w-10 h-10 rounded-full ${config.bgColor} flex items-center justify-center`}>
@@ -139,6 +182,33 @@ export function SeptalPanel({
   nodeEnrStates,
   onClose,
 }: SeptalPanelProps) {
+  // Track last refresh time for auto-refresh indicator
+  const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
+  const [refreshAgo, setRefreshAgo] = useState<string>('just now');
+
+  // Update refresh time when nodeEnrStates changes
+  useEffect(() => {
+    setLastRefresh(new Date());
+  }, [nodeEnrStates]);
+
+  // Update "time ago" display every second
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const seconds = Math.floor((Date.now() - lastRefresh.getTime()) / 1000);
+      if (seconds < 5) {
+        setRefreshAgo('just now');
+      } else if (seconds < 60) {
+        setRefreshAgo(`${seconds}s ago`);
+      } else if (seconds < 3600) {
+        setRefreshAgo(`${Math.floor(seconds / 60)}m ago`);
+      } else {
+        setRefreshAgo(`${Math.floor(seconds / 3600)}h ago`);
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [lastRefresh]);
+
   // Calculate network-wide septal statistics
   const stats = useMemo(() => {
     const nodes = Array.from(nodeEnrStates.values());
@@ -179,10 +249,19 @@ export function SeptalPanel({
           <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-glow-cyan via-glow-gold to-red-400" />
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-xl font-display font-bold text-mycelium-white">
-                Septal Gates
-              </h2>
-              <p className="text-sm text-soft-gray font-body">
+              <div className="flex items-center gap-3">
+                <h2 className="text-xl font-display font-bold text-mycelium-white">
+                  Septal Gates
+                </h2>
+                {/* Auto-refresh indicator */}
+                <div className="flex items-center gap-1.5 px-2 py-0.5 bg-moss rounded-full">
+                  <div className="w-1.5 h-1.5 rounded-full bg-glow-cyan animate-pulse" />
+                  <span className="text-xs text-soft-gray">
+                    Updated {refreshAgo}
+                  </span>
+                </div>
+              </div>
+              <p className="text-sm text-soft-gray font-body mt-0.5">
                 Circuit breaker status across network nodes
               </p>
             </div>
@@ -257,29 +336,35 @@ export function SeptalPanel({
                     <div className="text-xs text-soft-gray uppercase tracking-wider">Network Health</div>
                   </div>
 
-                  {/* State Counts */}
+                  {/* State Counts with Tooltips */}
                   <div className="space-y-2">
-                    <div className="flex items-center justify-between text-sm">
-                      <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 rounded-full bg-glow-cyan" />
-                        <span className="text-soft-gray">Closed</span>
+                    <Tooltip content={SEPTAL_STATE_TOOLTIPS.closed}>
+                      <div className="flex items-center justify-between text-sm cursor-help">
+                        <div className="flex items-center gap-2">
+                          <div className="w-3 h-3 rounded-full bg-glow-cyan" />
+                          <span className="text-soft-gray">Closed</span>
+                        </div>
+                        <span className="text-glow-cyan font-display">{stats.closed}</span>
                       </div>
-                      <span className="text-glow-cyan font-display">{stats.closed}</span>
-                    </div>
-                    <div className="flex items-center justify-between text-sm">
-                      <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 rounded-full bg-glow-gold" />
-                        <span className="text-soft-gray">Half Open</span>
+                    </Tooltip>
+                    <Tooltip content={SEPTAL_STATE_TOOLTIPS.half_open}>
+                      <div className="flex items-center justify-between text-sm cursor-help">
+                        <div className="flex items-center gap-2">
+                          <div className="w-3 h-3 rounded-full bg-glow-gold" />
+                          <span className="text-soft-gray">Half Open</span>
+                        </div>
+                        <span className="text-glow-gold font-display">{stats.halfOpen}</span>
                       </div>
-                      <span className="text-glow-gold font-display">{stats.halfOpen}</span>
-                    </div>
-                    <div className="flex items-center justify-between text-sm">
-                      <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 rounded-full bg-red-400" />
-                        <span className="text-soft-gray">Open</span>
+                    </Tooltip>
+                    <Tooltip content={SEPTAL_STATE_TOOLTIPS.open}>
+                      <div className="flex items-center justify-between text-sm cursor-help">
+                        <div className="flex items-center gap-2">
+                          <div className="w-3 h-3 rounded-full bg-red-400" />
+                          <span className="text-soft-gray">Open</span>
+                        </div>
+                        <span className="text-red-400 font-display">{stats.open}</span>
                       </div>
-                      <span className="text-red-400 font-display">{stats.open}</span>
-                    </div>
+                    </Tooltip>
                   </div>
 
                   {/* Total Nodes */}

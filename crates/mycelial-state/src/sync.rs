@@ -357,6 +357,7 @@ impl StateSync {
     }
 
     /// Apply a credit update using last-write-wins
+    #[allow(clippy::too_many_arguments)]
     async fn apply_credit_update(
         &self,
         creditor: &str,

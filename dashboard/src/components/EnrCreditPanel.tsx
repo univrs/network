@@ -1,7 +1,7 @@
 // src/components/EnrCreditPanel.tsx
 // Displays ENR credit balances and transfers across the network
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import type { NodeEnrState, EnrCreditTransfer } from '@/types';
 
 interface EnrCreditPanelProps {
@@ -9,6 +9,8 @@ interface EnrCreditPanelProps {
   enrTransfers: EnrCreditTransfer[];
   localPeerId?: string | null;
   onClose?: () => void;
+  // New action prop
+  onSendEnrCredit?: (to: string, amount: number) => void;
 }
 
 function shortenNodeId(id: string): string {
@@ -147,7 +149,12 @@ export function EnrCreditPanel({
   enrTransfers,
   localPeerId,
   onClose,
+  onSendEnrCredit,
 }: EnrCreditPanelProps) {
+  const [showTransferForm, setShowTransferForm] = useState(false);
+  const [transferTo, setTransferTo] = useState('');
+  const [transferAmount, setTransferAmount] = useState('');
+
   // Calculate network statistics
   const stats = useMemo(() => {
     const nodes = Array.from(nodeEnrStates.values());
@@ -191,13 +198,26 @@ export function EnrCreditPanel({
         <div className="relative px-6 py-4 bg-deep-earth border-b border-border-subtle">
           <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-glow-gold via-spore-purple to-glow-cyan" />
           <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-xl font-display font-bold text-mycelium-white">
-                ENR Credits
-              </h2>
-              <p className="text-sm text-soft-gray font-body">
-                Network resource credits and transfers
-              </p>
+            <div className="flex items-center gap-4">
+              <div>
+                <h2 className="text-xl font-display font-bold text-mycelium-white">
+                  ENR Credits
+                </h2>
+                <p className="text-sm text-soft-gray font-body">
+                  Network resource credits and transfers
+                </p>
+              </div>
+              {onSendEnrCredit && (
+                <button
+                  onClick={() => setShowTransferForm(true)}
+                  className="px-3 py-1.5 rounded-lg bg-spore-purple/20 text-spore-purple hover:bg-spore-purple/30 transition-colors text-sm font-display flex items-center gap-1.5"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M12 5v14M5 12h14" />
+                  </svg>
+                  Send Credits
+                </button>
+              )}
             </div>
             {onClose && (
               <button
@@ -336,6 +356,58 @@ export function EnrCreditPanel({
           )}
         </div>
       </div>
+
+      {/* Transfer Form Modal */}
+      {showTransferForm && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-void/80 backdrop-blur-sm">
+          <div className="w-full max-w-md bg-forest-floor border border-border-subtle rounded-xl p-6">
+            <h3 className="text-lg font-display text-mycelium-white mb-4">Send ENR Credits</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm text-soft-gray mb-1">Recipient Node ID</label>
+                <input
+                  type="text"
+                  value={transferTo}
+                  onChange={(e) => setTransferTo(e.target.value)}
+                  placeholder="Enter node ID..."
+                  className="w-full px-3 py-2 bg-bark border border-border-subtle rounded-lg text-mycelium-white placeholder:text-soft-gray/50"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-soft-gray mb-1">Amount</label>
+                <input
+                  type="number"
+                  value={transferAmount}
+                  onChange={(e) => setTransferAmount(e.target.value)}
+                  placeholder="Enter amount..."
+                  className="w-full px-3 py-2 bg-bark border border-border-subtle rounded-lg text-mycelium-white placeholder:text-soft-gray/50"
+                />
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowTransferForm(false)}
+                  className="flex-1 px-4 py-2 rounded-lg bg-soft-gray/20 text-soft-gray hover:bg-soft-gray/30 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    if (transferTo && transferAmount && onSendEnrCredit) {
+                      onSendEnrCredit(transferTo, parseInt(transferAmount, 10));
+                      setShowTransferForm(false);
+                      setTransferTo('');
+                      setTransferAmount('');
+                    }
+                  }}
+                  className="flex-1 px-4 py-2 rounded-lg bg-glow-cyan/20 text-glow-cyan hover:bg-glow-cyan/30 transition-colors"
+                >
+                  Send
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

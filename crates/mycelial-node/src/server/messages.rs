@@ -383,6 +383,7 @@ pub enum ClientMessage {
         /// Room ID to join
         room_id: String,
         /// Optional room name hint (for discovery)
+        #[allow(dead_code)]
         room_name: Option<String>,
     },
 
@@ -394,4 +395,53 @@ pub enum ClientMessage {
 
     /// Get list of available rooms
     GetRooms,
+
+    // ============ ENR Bridge Client Messages ============
+    /// Report resource gradient (availability)
+    ReportGradient {
+        /// CPU availability (0.0-1.0)
+        cpu_available: f64,
+        /// Memory availability (0.0-1.0)
+        memory_available: f64,
+        /// Bandwidth availability (0.0-1.0)
+        bandwidth_available: f64,
+        /// Storage availability (0.0-1.0)
+        storage_available: f64,
+    },
+
+    /// Start a nexus election for a region
+    StartElection {
+        /// Region identifier
+        region_id: String,
+    },
+
+    /// Register as an election candidate
+    RegisterCandidacy {
+        /// Election ID to register for
+        election_id: u64,
+        /// Node uptime in seconds
+        uptime: u64,
+        /// CPU availability (0.0-1.0)
+        cpu_available: f64,
+        /// Memory availability (0.0-1.0)
+        memory_available: f64,
+        /// Reputation score
+        reputation: f64,
+    },
+
+    /// Vote for a candidate in an election
+    VoteElection {
+        /// Election ID
+        election_id: u64,
+        /// Candidate node ID to vote for
+        candidate: String,
+    },
+
+    /// Send ENR credits to another node
+    SendEnrCredit {
+        /// Recipient node ID
+        to: String,
+        /// Amount of ENR credits to send
+        amount: u64,
+    },
 }

@@ -725,11 +725,16 @@ async fn handle_network_event(event: NetworkEvent, state: &AppState, local_peer_
             info!("Network stopped");
         }
 
-        NetworkEvent::DialFailed { peer_id, error } => {
-            if let Some(pid) = peer_id {
-                warn!("Failed to dial {}: {}", pid, error);
-            }
+        NetworkEvent::DialFailed {
+            peer_id: Some(pid),
+            error,
+        } => {
+            warn!("Failed to dial {}: {}", pid, error);
         }
+        NetworkEvent::DialFailed {
+            peer_id: None,
+            error: _,
+        } => {}
 
         NetworkEvent::MdnsDiscovered { peers } => {
             for (peer_id, addr) in &peers {
