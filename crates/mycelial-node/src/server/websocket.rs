@@ -127,8 +127,8 @@ async fn handle_client_message(msg: ClientMessage, state: &AppState) {
             match serde_json::to_vec(&chat_msg) {
                 Ok(data) => {
                     // Determine topic based on message target
-                    let topic = if room_id.is_some() {
-                        format!("/mycelial/1.0.0/room/{}", room_id.as_ref().unwrap())
+                    let topic = if let Some(id) = &room_id {
+                        format!("/mycelial/1.0.0/room/{}", id)
                     } else if to.is_some() {
                         "/mycelial/1.0.0/direct".to_string()
                     } else {
