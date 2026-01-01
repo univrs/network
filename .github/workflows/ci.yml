@@ -63,7 +63,8 @@ jobs:
 
       - name: Run clippy
         working-directory: univrs-network
-        run: cargo clippy --workspace --all-targets -- -D warnings
+        # Use --no-default-features to skip univrs-* path dependencies that may not be available
+        run: cargo clippy --workspace --all-targets --no-default-features -- -D warnings
 
   rust-test:
     name: Rust Tests
@@ -108,11 +109,13 @@ jobs:
 
       - name: Build workspace
         working-directory: univrs-network
-        run: cargo build --workspace
+        # Use --no-default-features to skip univrs-* path dependencies that may not be available
+        run: cargo build --workspace --no-default-features
 
       - name: Run tests
         working-directory: univrs-network
-        run: cargo test --workspace --verbose
+        # Use --no-default-features to skip univrs-* path dependencies that may not be available
+        run: cargo test --workspace --no-default-features --verbose
 
   rust-build-release:
     name: Rust Release Build
@@ -159,7 +162,8 @@ jobs:
 
       - name: Build release binary
         working-directory: univrs-network
-        run: cargo build --release --bin mycelial-node
+        # Use --no-default-features to skip univrs-* path dependencies that may not be available
+        run: cargo build --release --bin mycelial-node --no-default-features
 
       - name: Upload binary artifact
         uses: actions/upload-artifact@v4
@@ -188,7 +192,7 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v2
         with:
-          version: 8
+          version: 9
 
       - name: Get pnpm store directory
         id: pnpm-cache
@@ -229,7 +233,7 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v2
         with:
-          version: 8
+          version: 9
 
       - name: Get pnpm store directory
         id: pnpm-cache
@@ -268,7 +272,7 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v2
         with:
-          version: 8
+          version: 9
 
       - name: Get pnpm store directory
         id: pnpm-cache

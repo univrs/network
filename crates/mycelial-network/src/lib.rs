@@ -58,7 +58,8 @@ pub mod peer;
 pub mod service;
 pub mod transport;
 
-// Adding enr
+// ENR bridge module (requires univrs-compat feature for full univrs-enr integration)
+#[cfg(feature = "univrs-compat")]
 pub mod enr_bridge;
 
 // OpenRaft consensus layer (Phase 1)

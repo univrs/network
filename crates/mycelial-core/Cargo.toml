@@ -4,8 +4,9 @@ version.workspace = true
 edition.workspace = true
 
 [features]
-default = []
+default = ["univrs-compat"]
 wasm = []
+univrs-compat = ["dep:univrs-identity"]
 
 [dependencies]
 serde.workspace = true
@@ -17,7 +18,7 @@ thiserror.workspace = true
 chrono.workspace = true
 uuid.workspace = true
 async-trait.workspace = true
-univrs-identity.workspace = true
+univrs-identity = { workspace = true, optional = true }
 bs58 = "0.5"
 blake3 = "1.5"
 hex = "0.4"
