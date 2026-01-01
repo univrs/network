@@ -424,12 +424,18 @@ async fn handle_client_message(msg: ClientMessage, state: &AppState) {
                 _ => Vote::Abstain,
             };
 
+            // Vote weight is based on the voter's reputation (0.1 to 1.0 scale)
+            // Minimum weight of 0.1 ensures new peers can still participate
+            let voter_id = state.local_peer_id.to_string();
+            let reputation = state.economics.get_reputation(&voter_id);
+            let vote_weight = (reputation * 0.9 + 0.1).clamp(0.1, 1.0);
+
             // CastVote::new takes (proposal_id: Uuid, voter, vote, weight)
             let vote_msg = GovernanceMessage::CastVote(ProtocolCastVote::new(
                 prop_uuid,
-                state.local_peer_id.to_string(),
+                voter_id.clone(),
                 vote_enum,
-                1.0, // Default weight, could be based on reputation
+                vote_weight,
             ));
 
             match serde_json::to_vec(&vote_msg) {
@@ -440,9 +446,9 @@ async fn handle_client_message(msg: ClientMessage, state: &AppState) {
                         let echo_msg = WsMessage::VoteCast {
                             id: Uuid::new_v4().to_string(),
                             proposal_id,
-                            voter: state.local_peer_id.to_string(),
+                            voter: voter_id,
                             vote,
-                            weight: 1.0,
+                            weight: vote_weight,
                             timestamp,
                         };
                         let _ = state.event_tx.send(echo_msg);
