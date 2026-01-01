@@ -123,6 +123,8 @@ pub struct EconomicsStateManager {
     resource_pool: RwLock<ResourcePool>,
     /// Peer reputations (calculated from vouches)
     reputations: RwLock<HashMap<String, f64>>,
+    /// Last activity timestamp per peer (for reputation decay)
+    last_active: RwLock<HashMap<String, i64>>,
     /// Creation time for uptime tracking
     created_at: Instant,
 }
@@ -137,6 +139,7 @@ impl EconomicsStateManager {
             vouches_by_peers: RwLock::new(HashMap::new()),
             resource_pool: RwLock::new(ResourcePool::default()),
             reputations: RwLock::new(HashMap::new()),
+            last_active: RwLock::new(HashMap::new()),
             created_at: Instant::now(),
         }
     }
@@ -371,6 +374,67 @@ impl EconomicsStateManager {
         (total_weight / count).clamp(0.0, 1.0)
     }
 
+    /// Record peer activity (for decay tracking)
+    pub fn record_activity(&self, peer_id: &str) {
+        let now = chrono::Utc::now().timestamp_millis();
+        self.last_active.write().insert(peer_id.to_string(), now);
+    }
+
+    /// Apply reputation decay for inactive peers
+    ///
+    /// Peers inactive for more than `inactive_threshold_hours` will have their
+    /// reputation reduced by `decay_rate` per hour of inactivity.
+    ///
+    /// Returns the number of peers whose reputation was decayed.
+    pub fn decay_inactive_reputations(
+        &self,
+        inactive_threshold_hours: u64,
+        decay_rate: f64,
+    ) -> usize {
+        let now = chrono::Utc::now().timestamp_millis();
+        let threshold_ms = (inactive_threshold_hours * 3600 * 1000) as i64;
+        let min_reputation = 0.1; // Don't decay below this floor
+
+        let last_active = self.last_active.read();
+        let mut reputations = self.reputations.write();
+
+        let mut decayed_count = 0;
+
+        for (peer_id, reputation) in reputations.iter_mut() {
+            // Get last activity time, or assume creation time if not tracked
+            let last_seen = last_active
+                .get(peer_id)
+                .copied()
+                .unwrap_or(now - threshold_ms); // Assume just at threshold if unknown
+
+            let inactive_ms = now - last_seen;
+
+            if inactive_ms > threshold_ms && *reputation > min_reputation {
+                // Calculate decay based on hours of inactivity
+                let inactive_hours = (inactive_ms - threshold_ms) as f64 / 3600000.0;
+                let decay_amount = decay_rate * inactive_hours;
+                let new_rep = (*reputation - decay_amount).max(min_reputation);
+
+                if new_rep < *reputation {
+                    *reputation = new_rep;
+                    decayed_count += 1;
+                }
+            }
+        }
+
+        decayed_count
+    }
+
+    /// Get peers with low reputation (below threshold)
+    pub fn get_low_reputation_peers(&self, threshold: f64) -> Vec<(String, f64)> {
+        self.reputations
+            .read()
+            .iter()
+            .filter(|(_, &rep)| rep < threshold)
+            .map(|(id, &rep)| (id.clone(), rep))
+            .collect()
+    }
+
     // ─────────────────────────────────────────────────────────────────────────────
     // Resource Operations
     // ─────────────────────────────────────────────────────────────────────────────
@@ -560,5 +624,57 @@ mod tests {
         let summary = manager.get_summary();
         assert_eq!(summary.credit_line_count, 0);
         assert_eq!(summary.active_proposal_count, 0);
+    }
+
+    #[test]
+    fn test_reputation_decay() {
+        let manager = EconomicsStateManager::new();
+
+        // Set up a peer with high reputation
+        manager.reputations.write().insert("alice".to_string(), 0.9);
+
+        // Record activity long ago (simulate inactivity)
+        let old_time = chrono::Utc::now().timestamp_millis() - (25 * 3600 * 1000); // 25 hours ago
+        manager
+            .last_active
+            .write()
+            .insert("alice".to_string(), old_time);
+
+        // Apply decay with 24-hour threshold and 0.01 decay rate per hour
+        let decayed = manager.decay_inactive_reputations(24, 0.01);
+
+        assert_eq!(decayed, 1);
+        let new_rep = manager.get_reputation("alice");
+        assert!(new_rep < 0.9); // Should have decayed
+        assert!(new_rep >= 0.1); // Should not go below floor
+    }
+
+    #[test]
+    fn test_activity_recording() {
+        let manager = EconomicsStateManager::new();
+
+        manager.record_activity("bob");
+
+        let last_active = manager.last_active.read();
+        assert!(last_active.contains_key("bob"));
+    }
+
+    #[test]
+    fn test_low_reputation_peers() {
+        let manager = EconomicsStateManager::new();
+
+        manager
+            .reputations
+            .write()
+            .insert("alice".to_string(), 0.8);
+        manager.reputations.write().insert("bob".to_string(), 0.2);
+        manager
+            .reputations
+            .write()
+            .insert("charlie".to_string(), 0.5);
+
+        let low_rep = manager.get_low_reputation_peers(0.5);
+        assert_eq!(low_rep.len(), 1);
+        assert_eq!(low_rep[0].0, "bob");
     }
 }
