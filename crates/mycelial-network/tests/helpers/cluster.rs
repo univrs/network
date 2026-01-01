@@ -6,8 +6,8 @@
 //! - Mesh formation waiting
 //! - Cleanup on drop
 
-use std::sync::Arc;
 use std::sync::atomic::{AtomicU16, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::broadcast;
 use tokio::time::timeout;
@@ -56,8 +56,11 @@ impl TestCluster {
         // Get unique base port for this test cluster
         // Use modular arithmetic to stay in valid port range
         let cluster_offset = PORT_COUNTER.fetch_add(count as u16 * 2, Ordering::SeqCst) % 10000;
-        let base_port = 20000u16.wrapping_add((std::process::id() as u16 % 100) * 100)
-            .wrapping_add(cluster_offset) % 40000 + 20000;
+        let base_port = 20000u16
+            .wrapping_add((std::process::id() as u16 % 100) * 100)
+            .wrapping_add(cluster_offset)
+            % 40000
+            + 20000;
 
         // First pass: create nodes and collect their addresses
         let mut keypairs = Vec::with_capacity(count);

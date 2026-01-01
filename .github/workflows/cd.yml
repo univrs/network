@@ -4,19 +4,22 @@
 # Multi-cloud deployment to Oracle (bootstrap), Azure (peer), AWS (peer)
 #
 # Triggers:
-#   - Push to main branch (after CI passes)
-#   - Manual workflow dispatch
+#   - Manual workflow dispatch only (secrets must be configured first)
 #
 # Prerequisites:
 #   - Cloud VMs provisioned with Docker installed
 #   - GitHub secrets configured (see docs/CLOUD-DEPLOYMENT.md)
+#   - ORACLE_HOST, ORACLE_USER, ORACLE_SSH_KEY
+#   - AZURE_HOST, AZURE_USER, AZURE_SSH_KEY
+#   - AWS_HOST, AWS_USER, AWS_SSH_KEY
 # =============================================================================
 
 name: CD
 
 on:
-  push:
-    branches: [main]
+  # Disabled: push to main triggers CD but requires secrets to be configured
+  # push:
+  #   branches: [main]
   workflow_dispatch:
     inputs:
       deploy_target:

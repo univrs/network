@@ -1,18 +1,17 @@
 //! Identity management with Ed25519 keys and DID support
 //!
-//! This module provides cryptographic identity primitives for the mycelial network,
-//! using the unified `univrs-identity` crate for core types.
+//! This module provides cryptographic identity primitives for the mycelial network.
+//! When the `univrs-compat` feature is enabled (default), it uses the unified
+//! `univrs-identity` crate. Otherwise, inline Ed25519 implementations are used.
 //!
-//! ## Type Re-exports
+//! ## Core Types
 //!
-//! Core identity types are re-exported from `univrs-identity`:
 //! - [`Keypair`]: Ed25519 keypair for signing
 //! - [`PublicKey`]: Ed25519 public key for verification
 //! - [`Signature`]: Ed25519 signature
 //!
-//! ## Local Types
+//! ## Mycelial-specific Types
 //!
-//! Mycelial-specific types:
 //! - [`Did`]: Decentralized Identifier (did:key method)
 //! - [`Signed<T>`]: Cryptographically signed data wrapper
 //! - [`SignatureBytes`]: Legacy signature format for backward compatibility
@@ -22,12 +21,180 @@ use std::fmt;
 
 use crate::{MycelialError, Result};
 
-// Re-export core identity types from univrs-identity
-pub use univrs_identity::{
-    Keypair,
-    PublicKey,
-    Signature,
-};
+// When univrs-compat feature is enabled, use univrs-identity crate
+#[cfg(feature = "univrs-compat")]
+pub use univrs_identity::{Keypair, PublicKey, Signature};
+
+// When univrs-compat feature is disabled, use inline Ed25519 implementations
+#[cfg(not(feature = "univrs-compat"))]
+mod inline_identity {
+    use ed25519_dalek::{Signer, SigningKey, Verifier, VerifyingKey};
+    use rand::rngs::OsRng;
+    use serde::{Deserialize, Serialize};
+    use std::fmt;
+
+    /// Ed25519 keypair for signing operations
+    #[derive(Clone)]
+    pub struct Keypair {
+        signing_key: SigningKey,
+    }
+
+    impl Keypair {
+        /// Generate a new random keypair
+        pub fn generate() -> Self {
+            let signing_key = SigningKey::generate(&mut OsRng);
+            Self { signing_key }
+        }
+
+        /// Create from secret key bytes
+        pub fn from_bytes(bytes: &[u8]) -> Result<Self, String> {
+            if bytes.len() != 32 {
+                return Err("Invalid key length".into());
+            }
+            let mut arr = [0u8; 32];
+            arr.copy_from_slice(bytes);
+            Ok(Self {
+                signing_key: SigningKey::from_bytes(&arr),
+            })
+        }
+
+        /// Get the public key
+        pub fn public_key(&self) -> PublicKey {
+            PublicKey {
+                verifying_key: self.signing_key.verifying_key(),
+            }
+        }
+
+        /// Sign a message
+        pub fn sign(&self, message: &[u8]) -> Signature {
+            Signature {
+                inner: self.signing_key.sign(message),
+            }
+        }
+
+        /// Get secret key bytes
+        pub fn to_bytes(&self) -> [u8; 32] {
+            self.signing_key.to_bytes()
+        }
+    }
+
+    impl fmt::Debug for Keypair {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            write!(f, "Keypair({})", self.public_key())
+        }
+    }
+
+    /// Ed25519 public key for verification
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    pub struct PublicKey {
+        verifying_key: VerifyingKey,
+    }
+
+    impl PublicKey {
+        /// Create from raw bytes
+        pub fn from_bytes(bytes: &[u8]) -> Result<Self, String> {
+            if bytes.len() != 32 {
+                return Err("Invalid key length".into());
+            }
+            let mut arr = [0u8; 32];
+            arr.copy_from_slice(bytes);
+            let verifying_key = VerifyingKey::from_bytes(&arr).map_err(|e| e.to_string())?;
+            Ok(Self { verifying_key })
+        }
+
+        /// Get raw bytes
+        pub fn as_bytes(&self) -> &[u8; 32] {
+            self.verifying_key.as_bytes()
+        }
+
+        /// Encode as base58
+        pub fn to_base58(&self) -> String {
+            bs58::encode(self.as_bytes()).into_string()
+        }
+
+        /// Decode from base58
+        pub fn from_base58(s: &str) -> Result<Self, String> {
+            let bytes = bs58::decode(s).into_vec().map_err(|e| e.to_string())?;
+            Self::from_bytes(&bytes)
+        }
+
+        /// Verify a signature
+        pub fn verify(&self, message: &[u8], signature: &Signature) -> bool {
+            self.verifying_key.verify(message, &signature.inner).is_ok()
+        }
+
+        /// Convert to libp2p peer ID format
+        pub fn to_peer_id(&self) -> String {
+            bs58::encode(self.as_bytes()).into_string()
+        }
+    }
+
+    impl fmt::Display for PublicKey {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            write!(f, "{}", self.to_base58())
+        }
+    }
+
+    impl fmt::Debug for PublicKey {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            write!(f, "PublicKey({})", self.to_base58())
+        }
+    }
+
+    impl Serialize for PublicKey {
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: serde::Serializer,
+        {
+            serializer.serialize_str(&self.to_base58())
+        }
+    }
+
+    impl<'de> Deserialize<'de> for PublicKey {
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where
+            D: serde::Deserializer<'de>,
+        {
+            let s = String::deserialize(deserializer)?;
+            Self::from_base58(&s).map_err(serde::de::Error::custom)
+        }
+    }
+
+    /// Ed25519 signature
+    #[derive(Clone, Copy)]
+    pub struct Signature {
+        inner: ed25519_dalek::Signature,
+    }
+
+    impl Signature {
+        /// Create from raw bytes
+        pub fn from_bytes(bytes: &[u8]) -> Result<Self, String> {
+            if bytes.len() != 64 {
+                return Err("Invalid signature length".into());
+            }
+            let mut arr = [0u8; 64];
+            arr.copy_from_slice(bytes);
+            Ok(Self {
+                inner: ed25519_dalek::Signature::from_bytes(&arr),
+            })
+        }
+
+        /// Get raw bytes
+        pub fn to_bytes(&self) -> [u8; 64] {
+            self.inner.to_bytes()
+        }
+    }
+
+    impl fmt::Debug for Signature {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            let hex = hex::encode(&self.to_bytes()[..8]);
+            write!(f, "Signature({}...)", hex)
+        }
+    }
+}
+
+#[cfg(not(feature = "univrs-compat"))]
+pub use inline_identity::{Keypair, PublicKey, Signature};
 
 /// Legacy signature bytes format for backward compatibility.
 ///
@@ -53,10 +220,12 @@ impl SignatureBytes {
 
     /// Decode from hex
     pub fn from_hex(s: &str) -> crate::Result<Self> {
-        let bytes = hex::decode(s)
-            .map_err(|e| crate::MycelialError::Serialization(e.to_string()))?;
+        let bytes =
+            hex::decode(s).map_err(|e| crate::MycelialError::Serialization(e.to_string()))?;
         if bytes.len() != 64 {
-            return Err(crate::MycelialError::Serialization("Invalid signature length".into()));
+            return Err(crate::MycelialError::Serialization(
+                "Invalid signature length".into(),
+            ));
         }
         let mut arr = [0u8; 64];
         arr.copy_from_slice(&bytes);
@@ -70,8 +239,7 @@ impl SignatureBytes {
 
     /// Convert to univrs-identity Signature
     pub fn to_signature(&self) -> Result<Signature> {
-        Signature::from_bytes(&self.0)
-            .map_err(|_| MycelialError::InvalidSignature)
+        Signature::from_bytes(&self.0).map_err(|_| MycelialError::InvalidSignature)
     }
 }
 
@@ -137,7 +305,7 @@ impl Did {
     pub fn parse(s: &str) -> Result<Self> {
         if !s.starts_with("did:key:") {
             return Err(MycelialError::Serialization(
-                "Invalid DID format: must start with 'did:key:'".into()
+                "Invalid DID format: must start with 'did:key:'".into(),
             ));
         }
         Ok(Self(s.to_string()))
@@ -150,18 +318,21 @@ impl Did {
 
     /// Extract the public key from the DID
     pub fn to_public_key(&self) -> Result<PublicKey> {
-        let multibase_part = self.0.strip_prefix("did:key:")
+        let multibase_part = self
+            .0
+            .strip_prefix("did:key:")
             .ok_or_else(|| MycelialError::Serialization("Invalid DID format".into()))?;
 
         let (_, bytes) = multibase::decode(multibase_part)
             .map_err(|e| MycelialError::Serialization(e.to_string()))?;
 
         if bytes.len() != 34 || bytes[0..2] != Self::ED25519_MULTICODEC {
-            return Err(MycelialError::Serialization("Invalid DID key format".into()));
+            return Err(MycelialError::Serialization(
+                "Invalid DID key format".into(),
+            ));
         }
 
-        PublicKey::from_bytes(&bytes[2..34])
-            .map_err(|_| MycelialError::InvalidSignature)
+        PublicKey::from_bytes(&bytes[2..34]).map_err(|_| MycelialError::InvalidSignature)
     }
 }
 
@@ -234,8 +405,8 @@ pub struct Signed<T> {
 impl<T: Serialize> Signed<T> {
     /// Create a new signed value
     pub fn new(data: T, keypair: &Keypair) -> Result<Self> {
-        let bytes = serde_cbor::to_vec(&data)
-            .map_err(|e| MycelialError::Serialization(e.to_string()))?;
+        let bytes =
+            serde_cbor::to_vec(&data).map_err(|e| MycelialError::Serialization(e.to_string()))?;
         let signature = keypair.sign_bytes(&bytes);
 
         Ok(Self {

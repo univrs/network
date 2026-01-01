@@ -639,11 +639,7 @@ mod tests {
 
     #[test]
     fn test_vouch_request_creation() {
-        let vouch = VouchRequest::new(
-            "alice".to_string(),
-            "bob".to_string(),
-            0.5,
-        );
+        let vouch = VouchRequest::new("alice".to_string(), "bob".to_string(), 0.5);
 
         assert_eq!(vouch.voucher, "alice");
         assert_eq!(vouch.vouchee, "bob");
@@ -670,11 +666,7 @@ mod tests {
 
     #[test]
     fn test_credit_line_creation() {
-        let line = CreateCreditLine::new(
-            "alice".to_string(),
-            "bob".to_string(),
-            100.0,
-        );
+        let line = CreateCreditLine::new("alice".to_string(), "bob".to_string(), 100.0);
 
         assert_eq!(line.creditor, "alice");
         assert_eq!(line.debtor, "bob");
@@ -685,12 +677,8 @@ mod tests {
     #[test]
     fn test_credit_transfer() {
         let line_id = Uuid::new_v4();
-        let transfer = CreditTransfer::new(
-            line_id,
-            "alice".to_string(),
-            "bob".to_string(),
-            50.0,
-        ).with_memo("Payment for services");
+        let transfer = CreditTransfer::new(line_id, "alice".to_string(), "bob".to_string(), 50.0)
+            .with_memo("Payment for services");
 
         assert_eq!(transfer.line_id, line_id);
         assert_eq!(transfer.amount, 50.0);
@@ -716,12 +704,8 @@ mod tests {
     #[test]
     fn test_cast_vote() {
         let proposal_id = Uuid::new_v4();
-        let vote = CastVote::new(
-            proposal_id,
-            "bob".to_string(),
-            Vote::For,
-            0.8,
-        ).with_reason("I support this proposal");
+        let vote = CastVote::new(proposal_id, "bob".to_string(), Vote::For, 0.8)
+            .with_reason("I support this proposal");
 
         assert_eq!(vote.proposal_id, proposal_id);
         assert_eq!(vote.vote, Vote::For);
@@ -736,7 +720,8 @@ mod tests {
             ResourceType::Bandwidth,
             1000.0,
             "Mbps".to_string(),
-        ).with_duration(3600);
+        )
+        .with_duration(3600);
 
         assert_eq!(contrib.peer_id, "alice");
         assert_eq!(contrib.resource_type, ResourceType::Bandwidth);
@@ -753,7 +738,8 @@ mod tests {
         ));
 
         let json = serde_json::to_string(&msg).expect("serialization failed");
-        let deserialized: VouchMessage = serde_json::from_str(&json).expect("deserialization failed");
+        let deserialized: VouchMessage =
+            serde_json::from_str(&json).expect("deserialization failed");
 
         if let VouchMessage::VouchRequest(vouch) = deserialized {
             assert_eq!(vouch.voucher, "alice");
@@ -772,7 +758,8 @@ mod tests {
         ));
 
         let json = serde_json::to_string(&msg).expect("serialization failed");
-        let deserialized: CreditMessage = serde_json::from_str(&json).expect("deserialization failed");
+        let deserialized: CreditMessage =
+            serde_json::from_str(&json).expect("deserialization failed");
 
         if let CreditMessage::CreateLine(line) = deserialized {
             assert_eq!(line.creditor, "alice");
@@ -792,7 +779,8 @@ mod tests {
         ));
 
         let json = serde_json::to_string(&msg).expect("serialization failed");
-        let deserialized: GovernanceMessage = serde_json::from_str(&json).expect("deserialization failed");
+        let deserialized: GovernanceMessage =
+            serde_json::from_str(&json).expect("deserialization failed");
 
         if let GovernanceMessage::CastVote(vote) = deserialized {
             assert_eq!(vote.voter, "alice");
@@ -812,7 +800,8 @@ mod tests {
         ));
 
         let json = serde_json::to_string(&msg).expect("serialization failed");
-        let deserialized: ResourceMessage = serde_json::from_str(&json).expect("deserialization failed");
+        let deserialized: ResourceMessage =
+            serde_json::from_str(&json).expect("deserialization failed");
 
         if let ResourceMessage::Contribution(contrib) = deserialized {
             assert_eq!(contrib.peer_id, "alice");

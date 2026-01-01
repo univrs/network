@@ -37,11 +37,12 @@ impl ContentId {
 
     /// Decode from hex string
     pub fn from_hex(s: &str) -> Result<Self> {
-        let bytes = hex::decode(s)
-            .map_err(|e| MycelialError::Serialization(e.to_string()))?;
+        let bytes = hex::decode(s).map_err(|e| MycelialError::Serialization(e.to_string()))?;
 
         if bytes.len() != 32 {
-            return Err(MycelialError::Serialization("Invalid content ID length".into()));
+            return Err(MycelialError::Serialization(
+                "Invalid content ID length".into(),
+            ));
         }
 
         let mut arr = [0u8; 32];
@@ -61,7 +62,9 @@ impl ContentId {
             .map_err(|e| MycelialError::Serialization(e.to_string()))?;
 
         if bytes.len() != 32 {
-            return Err(MycelialError::Serialization("Invalid content ID length".into()));
+            return Err(MycelialError::Serialization(
+                "Invalid content ID length".into(),
+            ));
         }
 
         let mut arr = [0u8; 32];
@@ -120,8 +123,8 @@ impl Content {
 
     /// Create JSON content
     pub fn json<T: Serialize>(value: &T) -> Result<Self> {
-        let json = serde_json::to_vec(value)
-            .map_err(|e| MycelialError::Serialization(e.to_string()))?;
+        let json =
+            serde_json::to_vec(value).map_err(|e| MycelialError::Serialization(e.to_string()))?;
         Ok(Self::new(json, "application/json"))
     }
 
@@ -137,8 +140,7 @@ impl Content {
 
     /// Parse content as JSON
     pub fn parse_json<T: for<'de> Deserialize<'de>>(&self) -> Result<T> {
-        serde_json::from_slice(&self.data)
-            .map_err(|e| MycelialError::Serialization(e.to_string()))
+        serde_json::from_slice(&self.data).map_err(|e| MycelialError::Serialization(e.to_string()))
     }
 }
 

@@ -33,27 +33,26 @@
 //! ```
 
 // Core modules
-pub mod identity;
 pub mod content;
+pub mod credit;
+pub mod identity;
+pub mod location;
+pub mod message;
 pub mod peer;
 pub mod reputation;
-pub mod credit;
-pub mod message;
-pub mod location;
 
 // Infrastructure modules
-pub mod module;
-pub mod event;
 pub mod config;
 pub mod error;
+pub mod event;
+pub mod module;
 
 // Re-exports for convenience
 pub use error::{MycelialError, Result};
 
 // Identity re-exports
 pub use identity::{
-    Did, Keypair, KeypairExt, PublicKey, PublicKeyExt,
-    Signature, SignatureBytes, Signed,
+    Did, Keypair, KeypairExt, PublicKey, PublicKeyExt, Signature, SignatureBytes, Signed,
 };
 
 // Content re-exports
@@ -72,13 +71,15 @@ pub use credit::CreditRelationship;
 pub use message::{Message, MessageType};
 
 // Module re-exports
-pub use module::{ModuleInfo, ModuleMessage, ModuleMetrics, ModuleRegistry, ModuleState, MyceliaModule};
+pub use module::{
+    ModuleInfo, ModuleMessage, ModuleMetrics, ModuleRegistry, ModuleState, MyceliaModule,
+};
 
 // Event re-exports
 pub use event::{Event, EventFilter, EventPayload, EventType};
 
 // Config re-exports
-pub use config::{NodeConfig, NetworkConfig, StorageConfig};
+pub use config::{NetworkConfig, NodeConfig, StorageConfig};
 
 // Location re-exports
 pub use location::Location;

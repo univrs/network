@@ -59,7 +59,10 @@ fn test_node_response_format() {
     assert!(response["peer_id"].is_string());
     assert!(response["name"].is_string());
     assert!(response["version"].is_string());
-    assert!(response["protocol_version"].as_str().unwrap().starts_with("/mycelial/"));
+    assert!(response["protocol_version"]
+        .as_str()
+        .unwrap()
+        .starts_with("/mycelial/"));
 }
 
 /// Test expected format for GET /api/peers/{id} response
@@ -101,7 +104,10 @@ fn test_peer_id_format() {
     ];
 
     for peer_id in valid_peer_ids {
-        assert!(peer_id.starts_with("12D3KooW"), "Peer ID should start with 12D3KooW");
+        assert!(
+            peer_id.starts_with("12D3KooW"),
+            "Peer ID should start with 12D3KooW"
+        );
     }
 }
 
@@ -231,7 +237,9 @@ fn test_resource_pool_response() {
     });
 
     let resource_type = response["resource_type"].as_str().unwrap();
-    assert!(resource_type == "bandwidth" || resource_type == "storage" || resource_type == "compute");
+    assert!(
+        resource_type == "bandwidth" || resource_type == "storage" || resource_type == "compute"
+    );
 
     let total = response["total_available"].as_f64().unwrap();
     let used = response["total_used"].as_f64().unwrap();

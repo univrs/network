@@ -49,7 +49,12 @@ async fn test_election_announcement_propagates() {
             reputation: 0.9,
             connection_count: (cluster.node_count() - 1) as u32,
         };
-        cluster.node(i).enr_bridge.election.update_metrics(metrics).await;
+        cluster
+            .node(i)
+            .enr_bridge
+            .election
+            .update_metrics(metrics)
+            .await;
     }
 
     // Give time for metrics to settle
@@ -95,11 +100,7 @@ async fn test_election_announcement_propagates() {
     // All nodes should know an election is in progress
     for i in 0..cluster.node_count() {
         let in_progress = cluster.node(i).enr_bridge.election_in_progress().await;
-        assert!(
-            in_progress,
-            "Node {} should see election in progress",
-            i
-        );
+        assert!(in_progress, "Node {} should see election in progress", i);
     }
 
     cluster.shutdown().await;
@@ -136,7 +137,12 @@ async fn test_election_completes_with_winner() {
         reputation: 0.95,
         connection_count: 2,
     };
-    cluster.node(1).enr_bridge.election.update_metrics(high_metrics).await;
+    cluster
+        .node(1)
+        .enr_bridge
+        .election
+        .update_metrics(high_metrics)
+        .await;
 
     // Set lower metrics on other nodes
     for i in [0, 2] {
@@ -146,7 +152,12 @@ async fn test_election_completes_with_winner() {
             reputation: 0.8,
             connection_count: 2,
         };
-        cluster.node(i).enr_bridge.election.update_metrics(low_metrics).await;
+        cluster
+            .node(i)
+            .enr_bridge
+            .election
+            .update_metrics(low_metrics)
+            .await;
     }
 
     // Trigger election from node 0
@@ -223,7 +234,12 @@ async fn test_ineligible_node_cannot_win() {
         reputation: 0.9,
         connection_count: 2,
     };
-    cluster.node(0).enr_bridge.election.update_metrics(ineligible_metrics).await;
+    cluster
+        .node(0)
+        .enr_bridge
+        .election
+        .update_metrics(ineligible_metrics)
+        .await;
 
     // Set node 1 as eligible
     let eligible_metrics = LocalNodeMetrics {
@@ -232,7 +248,12 @@ async fn test_ineligible_node_cannot_win() {
         reputation: 0.9,
         connection_count: 2,
     };
-    cluster.node(1).enr_bridge.election.update_metrics(eligible_metrics).await;
+    cluster
+        .node(1)
+        .enr_bridge
+        .election
+        .update_metrics(eligible_metrics)
+        .await;
 
     // Node 0 tries to trigger election
     // It should work (any node can trigger), but node 0 won't submit candidacy

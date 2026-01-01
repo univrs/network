@@ -26,27 +26,48 @@ pub mod messages;
 pub use messages::{
     // Topics
     topics,
-    // Vouch protocol
-    VouchMessage, VouchRequest, VouchAck, ReputationUpdate, ReputationChangeReason,
+    BandwidthMetrics,
+    CastVote,
+    ComputeMetrics,
+    ContributorSummary,
+    CreateCreditLine,
+    CreateProposal,
+    CreditLineAck,
+    CreditLineUpdate,
     // Credit protocol
-    CreditMessage, CreateCreditLine, CreditLineAck, CreditTransfer, CreditTransferAck, CreditLineUpdate,
+    CreditMessage,
+    CreditTransfer,
+    CreditTransferAck,
     // Governance protocol
-    GovernanceMessage, CreateProposal, ProposalType, CastVote, Vote, ProposalUpdate, ProposalStatus, ProposalExecuted,
+    GovernanceMessage,
+    ProposalExecuted,
+    ProposalStatus,
+    ProposalType,
+    ProposalUpdate,
+    ReputationChangeReason,
+    ReputationUpdate,
+    ResourceContribution,
     // Resource protocol
-    ResourceMessage, ResourceContribution, ResourceType, ResourceMetrics,
-    BandwidthMetrics, StorageMetrics, ComputeMetrics, ResourcePoolUpdate, ContributorSummary,
+    ResourceMessage,
+    ResourceMetrics,
+    ResourcePoolUpdate,
+    ResourceType,
+    StorageMetrics,
+    Vote,
+    VouchAck,
+    // Vouch protocol
+    VouchMessage,
+    VouchRequest,
 };
 
 use mycelial_core::{Message, MycelialError, Result};
 
 /// Serialize a message to CBOR bytes
 pub fn serialize(message: &Message) -> Result<Vec<u8>> {
-    serde_cbor::to_vec(message)
-        .map_err(|e| MycelialError::Serialization(e.to_string()))
+    serde_cbor::to_vec(message).map_err(|e| MycelialError::Serialization(e.to_string()))
 }
 
 /// Deserialize a message from CBOR bytes
 pub fn deserialize(bytes: &[u8]) -> Result<Message> {
-    serde_cbor::from_slice(bytes)
-        .map_err(|e| MycelialError::Serialization(e.to_string()))
+    serde_cbor::from_slice(bytes).map_err(|e| MycelialError::Serialization(e.to_string()))
 }

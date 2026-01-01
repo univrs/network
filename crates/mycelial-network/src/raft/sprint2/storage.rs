@@ -92,7 +92,11 @@ impl RaftLogStorage<CreditTypeConfig> for MemoryLogStorage {
         }
     }
 
-    async fn append<I>(&mut self, entries: I, callback: openraft::storage::LogFlushed<u64>) -> Result<(), StorageError<u64>>
+    async fn append<I>(
+        &mut self,
+        entries: I,
+        callback: openraft::storage::LogFlushed<u64>,
+    ) -> Result<(), StorageError<u64>>
     where
         I: IntoIterator<Item = Entry<CreditTypeConfig>> + Send,
     {
@@ -109,11 +113,7 @@ impl RaftLogStorage<CreditTypeConfig> for MemoryLogStorage {
 
     async fn truncate(&mut self, log_id: LogId<u64>) -> Result<(), StorageError<u64>> {
         debug!(?log_id, "Truncating log");
-        let keys_to_remove: Vec<_> = self
-            .log
-            .range(log_id.index..)
-            .map(|(k, _)| *k)
-            .collect();
+        let keys_to_remove: Vec<_> = self.log.range(log_id.index..).map(|(k, _)| *k).collect();
 
         for key in keys_to_remove {
             self.log.remove(&key);
@@ -124,11 +124,7 @@ impl RaftLogStorage<CreditTypeConfig> for MemoryLogStorage {
 
     async fn purge(&mut self, log_id: LogId<u64>) -> Result<(), StorageError<u64>> {
         debug!(?log_id, "Purging log up to");
-        let keys_to_remove: Vec<_> = self
-            .log
-            .range(..=log_id.index)
-            .map(|(k, _)| *k)
-            .collect();
+        let keys_to_remove: Vec<_> = self.log.range(..=log_id.index).map(|(k, _)| *k).collect();
 
         for key in keys_to_remove {
             self.log.remove(&key);
@@ -222,11 +218,10 @@ impl RaftLogReader<CreditTypeConfig> for SledLogStorage {
                 source: std::io::Error::new(std::io::ErrorKind::Other, e),
             })?;
 
-            let entry: Entry<CreditTypeConfig> = bincode::deserialize(&value).map_err(|e| {
-                StorageError::IO {
+            let entry: Entry<CreditTypeConfig> =
+                bincode::deserialize(&value).map_err(|e| StorageError::IO {
                     source: std::io::Error::new(std::io::ErrorKind::InvalidData, e),
-                }
-            })?;
+                })?;
 
             entries.push(entry);
         }
@@ -239,9 +234,10 @@ impl RaftLogReader<CreditTypeConfig> for SledLogStorage {
             source: std::io::Error::new(std::io::ErrorKind::Other, e),
         })? {
             Some(bytes) => {
-                let vote: Vote<u64> = bincode::deserialize(&bytes).map_err(|e| StorageError::IO {
-                    source: std::io::Error::new(std::io::ErrorKind::InvalidData, e),
-                })?;
+                let vote: Vote<u64> =
+                    bincode::deserialize(&bytes).map_err(|e| StorageError::IO {
+                        source: std::io::Error::new(std::io::ErrorKind::InvalidData, e),
+                    })?;
                 Ok(Some(vote))
             }
             None => Ok(None),
@@ -309,7 +305,11 @@ impl RaftLogStorage<CreditTypeConfig> for SledLogStorage {
         }
     }
 
-    async fn append<I>(&mut self, entries: I, callback: openraft::storage::LogFlushed<u64>) -> Result<(), StorageError<u64>>
+    async fn append<I>(
+        &mut self,
+        entries: I,
+        callback: openraft::storage::LogFlushed<u64>,
+    ) -> Result<(), StorageError<u64>>
     where
         I: IntoIterator<Item = Entry<CreditTypeConfig>> + Send,
     {
@@ -319,9 +319,11 @@ impl RaftLogStorage<CreditTypeConfig> for SledLogStorage {
                 source: std::io::Error::new(std::io::ErrorKind::InvalidData, e),
             })?;
 
-            self.log_tree.insert(key, value).map_err(|e| StorageError::IO {
-                source: std::io::Error::new(std::io::ErrorKind::Other, e),
-            })?;
+            self.log_tree
+                .insert(key, value)
+                .map_err(|e| StorageError::IO {
+                    source: std::io::Error::new(std::io::ErrorKind::Other, e),
+                })?;
         }
 
         self.log_tree.flush().map_err(|e| StorageError::IO {

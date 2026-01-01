@@ -33,7 +33,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::{debug, info, warn};
-use univrs_enr::core::{AccountId, Credits, CreditTransfer, NodeId};
+use univrs_enr::core::{AccountId, CreditTransfer, Credits, NodeId};
 
 use crate::enr_bridge::credits::TransferError;
 
@@ -161,7 +161,10 @@ impl RaftCreditLedger {
     async fn apply_transfer(&self, transfer: &CreditTransfer) -> Result<(), TransferError> {
         let mut balances = self.balances.write().await;
 
-        let from_balance = balances.get(&transfer.from).copied().unwrap_or(Credits::ZERO);
+        let from_balance = balances
+            .get(&transfer.from)
+            .copied()
+            .unwrap_or(Credits::ZERO);
         let total_cost = transfer.amount.saturating_add(transfer.entropy_cost);
 
         if from_balance.amount < total_cost.amount {
@@ -172,11 +175,17 @@ impl RaftCreditLedger {
         }
 
         // Debit sender
-        balances.insert(transfer.from.clone(), from_balance.saturating_sub(total_cost));
+        balances.insert(
+            transfer.from.clone(),
+            from_balance.saturating_sub(total_cost),
+        );
 
         // Credit receiver
         let to_balance = balances.get(&transfer.to).copied().unwrap_or(Credits::ZERO);
-        balances.insert(transfer.to.clone(), to_balance.saturating_add(transfer.amount));
+        balances.insert(
+            transfer.to.clone(),
+            to_balance.saturating_add(transfer.amount),
+        );
 
         drop(balances);
 
@@ -232,12 +241,14 @@ impl RaftCreditLedger {
 
     /// Get local node's balance
     pub async fn local_balance(&self) -> Credits {
-        self.get_balance(&AccountId::node_account(self.local_node)).await
+        self.get_balance(&AccountId::node_account(self.local_node))
+            .await
     }
 
     /// Grant initial credits to a node
     pub async fn grant_credits(&self, node: NodeId, amount: Credits) -> Result<(), RaftError> {
-        self.propose(CreditCommand::GrantCredits { node, amount }).await?;
+        self.propose(CreditCommand::GrantCredits { node, amount })
+            .await?;
         Ok(())
     }
 
@@ -263,7 +274,9 @@ impl RaftCreditLedger {
     /// Get total credits in circulation
     pub async fn total_supply(&self) -> Credits {
         let balances = self.balances.read().await;
-        balances.values().fold(Credits::ZERO, |acc, c| acc.saturating_add(*c))
+        balances
+            .values()
+            .fold(Credits::ZERO, |acc, c| acc.saturating_add(*c))
     }
 
     /// Get revival pool balance
@@ -273,10 +286,14 @@ impl RaftCreditLedger {
 
     /// Handle incoming Raft message from gossipsub
     pub async fn handle_message(&self, bytes: &[u8]) -> Result<(), RaftError> {
-        let entry: RaftLogEntry = bincode::deserialize(bytes)
-            .map_err(|e| RaftError::Decode(e.to_string()))?;
+        let entry: RaftLogEntry =
+            bincode::deserialize(bytes).map_err(|e| RaftError::Decode(e.to_string()))?;
 
-        debug!(term = entry.term, index = entry.index, "Received Raft entry");
+        debug!(
+            term = entry.term,
+            index = entry.index,
+            "Received Raft entry"
+        );
 
         // If we're not the leader, apply the entry
         if !self.is_leader().await {
@@ -327,7 +344,10 @@ mod tests {
     /// Initial credits for test nodes (matches INITIAL_NODE_CREDITS)
     const TEST_INITIAL_CREDITS: u64 = 1000;
 
-    fn mock_publish() -> (impl Fn(String, Vec<u8>) -> Result<(), String> + Clone, Arc<AtomicUsize>) {
+    fn mock_publish() -> (
+        impl Fn(String, Vec<u8>) -> Result<(), String> + Clone,
+        Arc<AtomicUsize>,
+    ) {
         let counter = Arc::new(AtomicUsize::new(0));
         let c = counter.clone();
         let f = move |_topic: String, _bytes: Vec<u8>| {
@@ -413,7 +433,10 @@ mod tests {
             .await
             .unwrap();
 
-        ledger.grant_credits(node, Credits::new(1000)).await.unwrap();
+        ledger
+            .grant_credits(node, Credits::new(1000))
+            .await
+            .unwrap();
 
         let result = ledger.transfer(node, Credits::new(100)).await;
         assert!(matches!(result, Err(TransferError::SelfTransfer)));

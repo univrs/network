@@ -71,8 +71,13 @@ impl CreditStateMachine {
             }
             CreditCommand::GrantCredits { node, amount } => {
                 let account = AccountId::node_account(*node);
-                let current = self.balances.get(&account).copied().unwrap_or(Credits::ZERO);
-                self.balances.insert(account, current.saturating_add(*amount));
+                let current = self
+                    .balances
+                    .get(&account)
+                    .copied()
+                    .unwrap_or(Credits::ZERO);
+                self.balances
+                    .insert(account, current.saturating_add(*amount));
                 info!(node = %node, amount = amount.amount, "Granted credits");
                 CreditResponse::Grant
             }
@@ -101,13 +106,17 @@ impl CreditStateMachine {
         }
 
         // Debit sender
-        self.balances
-            .insert(transfer.from.clone(), from_balance.saturating_sub(total_cost));
+        self.balances.insert(
+            transfer.from.clone(),
+            from_balance.saturating_sub(total_cost),
+        );
 
         // Credit receiver
         let to_balance = self.get_balance(&transfer.to);
-        self.balances
-            .insert(transfer.to.clone(), to_balance.saturating_add(transfer.amount));
+        self.balances.insert(
+            transfer.to.clone(),
+            to_balance.saturating_add(transfer.amount),
+        );
 
         // Add tax to revival pool
         self.revival_pool = self.revival_pool.saturating_add(transfer.entropy_cost);
@@ -193,7 +202,9 @@ impl RaftStateMachine<CreditTypeConfig> for CreditStateMachine {
         }
     }
 
-    async fn begin_receiving_snapshot(&mut self) -> Result<Box<Cursor<Vec<u8>>>, StorageError<u64>> {
+    async fn begin_receiving_snapshot(
+        &mut self,
+    ) -> Result<Box<Cursor<Vec<u8>>>, StorageError<u64>> {
         Ok(Box::new(Cursor::new(Vec::new())))
     }
 
@@ -203,8 +214,8 @@ impl RaftStateMachine<CreditTypeConfig> for CreditStateMachine {
         snapshot: Box<Cursor<Vec<u8>>>,
     ) -> Result<(), StorageError<u64>> {
         let data = snapshot.into_inner();
-        let credit_snapshot: CreditSnapshot = bincode::deserialize(&data)
-            .map_err(|e| StorageError::IO {
+        let credit_snapshot: CreditSnapshot =
+            bincode::deserialize(&data).map_err(|e| StorageError::IO {
                 source: std::io::Error::new(std::io::ErrorKind::InvalidData, e),
             })?;
 
@@ -287,10 +298,7 @@ mod tests {
         });
 
         assert!(matches!(response, CreditResponse::Grant));
-        assert_eq!(
-            sm.get_balance(&AccountId::node_account(node)).amount,
-            1000
-        );
+        assert_eq!(sm.get_balance(&AccountId::node_account(node)).amount, 1000);
     }
 
     #[test]
@@ -321,10 +329,7 @@ mod tests {
             sm.get_balance(&AccountId::node_account(node1)).amount,
             898 // 1000 - 100 - 2 tax
         );
-        assert_eq!(
-            sm.get_balance(&AccountId::node_account(node2)).amount,
-            100
-        );
+        assert_eq!(sm.get_balance(&AccountId::node_account(node2)).amount, 100);
         assert_eq!(sm.revival_pool.amount, 2);
     }
 
@@ -375,9 +380,6 @@ mod tests {
         sm2.restore(restored);
 
         // Verify state matches
-        assert_eq!(
-            sm2.get_balance(&AccountId::node_account(node)).amount,
-            1000
-        );
+        assert_eq!(sm2.get_balance(&AccountId::node_account(node)).amount, 1000);
     }
 }

@@ -156,10 +156,7 @@ async fn test_self_transfer_rejected() {
         .transfer_credits(self_node_id, Credits::new(100))
         .await;
 
-    assert!(
-        result.is_err(),
-        "Self-transfer should be rejected"
-    );
+    assert!(result.is_err(), "Self-transfer should be rejected");
 
     // Balance should be unchanged
     let balance = cluster.node(0).balance().await;

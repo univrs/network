@@ -6,10 +6,7 @@
 //! - Governance: Proposals and voting
 //! - Resource: Resource sharing metrics
 
-use mycelial_protocol::{
-    topics,
-    VouchMessage, CreditMessage, GovernanceMessage, ResourceMessage,
-};
+use mycelial_protocol::{topics, CreditMessage, GovernanceMessage, ResourceMessage, VouchMessage};
 use tokio::sync::broadcast;
 use tracing::{debug, warn};
 
@@ -49,28 +46,24 @@ impl EconomicsHandler {
     pub fn handle_network_event(&self, event: &NetworkEvent) -> Option<EconomicsEvent> {
         if let NetworkEvent::MessageReceived { topic, data, .. } = event {
             match topic.as_str() {
-                t if t == topics::VOUCH => {
-                    match serde_json::from_slice::<VouchMessage>(data) {
-                        Ok(msg) => {
-                            debug!("Received vouch message: {:?}", msg);
-                            let event = EconomicsEvent::Vouch(msg);
-                            let _ = self.event_tx.send(event.clone());
-                            return Some(event);
-                        }
-                        Err(e) => warn!("Failed to parse vouch message: {}", e),
+                t if t == topics::VOUCH => match serde_json::from_slice::<VouchMessage>(data) {
+                    Ok(msg) => {
+                        debug!("Received vouch message: {:?}", msg);
+                        let event = EconomicsEvent::Vouch(msg);
+                        let _ = self.event_tx.send(event.clone());
+                        return Some(event);
                     }
-                }
-                t if t == topics::CREDIT => {
-                    match serde_json::from_slice::<CreditMessage>(data) {
-                        Ok(msg) => {
-                            debug!("Received credit message: {:?}", msg);
-                            let event = EconomicsEvent::Credit(msg);
-                            let _ = self.event_tx.send(event.clone());
-                            return Some(event);
-                        }
-                        Err(e) => warn!("Failed to parse credit message: {}", e),
+                    Err(e) => warn!("Failed to parse vouch message: {}", e),
+                },
+                t if t == topics::CREDIT => match serde_json::from_slice::<CreditMessage>(data) {
+                    Ok(msg) => {
+                        debug!("Received credit message: {:?}", msg);
+                        let event = EconomicsEvent::Credit(msg);
+                        let _ = self.event_tx.send(event.clone());
+                        return Some(event);
                     }
-                }
+                    Err(e) => warn!("Failed to parse credit message: {}", e),
+                },
                 t if t == topics::GOVERNANCE => {
                     match serde_json::from_slice::<GovernanceMessage>(data) {
                         Ok(msg) => {
@@ -101,29 +94,29 @@ impl EconomicsHandler {
 
     /// Publish a vouch message
     pub async fn publish_vouch(&self, msg: &VouchMessage) -> Result<()> {
-        let data = serde_json::to_vec(msg)
-            .map_err(|e| NetworkError::Serialization(e.to_string()))?;
+        let data =
+            serde_json::to_vec(msg).map_err(|e| NetworkError::Serialization(e.to_string()))?;
         self.network.publish(topics::VOUCH, data).await
     }
 
     /// Publish a credit message
     pub async fn publish_credit(&self, msg: &CreditMessage) -> Result<()> {
-        let data = serde_json::to_vec(msg)
-            .map_err(|e| NetworkError::Serialization(e.to_string()))?;
+        let data =
+            serde_json::to_vec(msg).map_err(|e| NetworkError::Serialization(e.to_string()))?;
         self.network.publish(topics::CREDIT, data).await
     }
 
     /// Publish a governance message
     pub async fn publish_governance(&self, msg: &GovernanceMessage) -> Result<()> {
-        let data = serde_json::to_vec(msg)
-            .map_err(|e| NetworkError::Serialization(e.to_string()))?;
+        let data =
+            serde_json::to_vec(msg).map_err(|e| NetworkError::Serialization(e.to_string()))?;
         self.network.publish(topics::GOVERNANCE, data).await
     }
 
     /// Publish a resource message
     pub async fn publish_resource(&self, msg: &ResourceMessage) -> Result<()> {
-        let data = serde_json::to_vec(msg)
-            .map_err(|e| NetworkError::Serialization(e.to_string()))?;
+        let data =
+            serde_json::to_vec(msg).map_err(|e| NetworkError::Serialization(e.to_string()))?;
         self.network.publish(topics::RESOURCE, data).await
     }
 }
@@ -131,26 +124,18 @@ impl EconomicsHandler {
 /// Parse a network message into an economics event
 pub fn parse_economics_message(topic: &str, data: &[u8]) -> Option<EconomicsEvent> {
     match topic {
-        t if t == topics::VOUCH => {
-            serde_json::from_slice::<VouchMessage>(data)
-                .ok()
-                .map(EconomicsEvent::Vouch)
-        }
-        t if t == topics::CREDIT => {
-            serde_json::from_slice::<CreditMessage>(data)
-                .ok()
-                .map(EconomicsEvent::Credit)
-        }
-        t if t == topics::GOVERNANCE => {
-            serde_json::from_slice::<GovernanceMessage>(data)
-                .ok()
-                .map(EconomicsEvent::Governance)
-        }
-        t if t == topics::RESOURCE => {
-            serde_json::from_slice::<ResourceMessage>(data)
-                .ok()
-                .map(EconomicsEvent::Resource)
-        }
+        t if t == topics::VOUCH => serde_json::from_slice::<VouchMessage>(data)
+            .ok()
+            .map(EconomicsEvent::Vouch),
+        t if t == topics::CREDIT => serde_json::from_slice::<CreditMessage>(data)
+            .ok()
+            .map(EconomicsEvent::Credit),
+        t if t == topics::GOVERNANCE => serde_json::from_slice::<GovernanceMessage>(data)
+            .ok()
+            .map(EconomicsEvent::Governance),
+        t if t == topics::RESOURCE => serde_json::from_slice::<ResourceMessage>(data)
+            .ok()
+            .map(EconomicsEvent::Resource),
         _ => None,
     }
 }
@@ -176,7 +161,9 @@ pub fn economics_topics() -> &'static [&'static str] {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use mycelial_protocol::{VouchRequest, CreateCreditLine, CreateProposal, ResourceContribution, ResourceType};
+    use mycelial_protocol::{
+        CreateCreditLine, CreateProposal, ResourceContribution, ResourceType, VouchRequest,
+    };
 
     #[test]
     fn test_is_economics_topic() {

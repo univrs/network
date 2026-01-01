@@ -1,9 +1,9 @@
 //! Message types for peer-to-peer communication
 
-use serde::{Deserialize, Serialize};
-use chrono::{DateTime, Utc};
-use uuid::Uuid;
 use crate::peer::PeerId;
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 /// A message in the mycelial network
 #[derive(Debug, Clone, Serialize, Deserialize)]

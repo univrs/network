@@ -131,7 +131,8 @@ impl MycelialBehaviour {
     /// Get all peers subscribed to a topic (includes non-mesh peers)
     pub fn all_peers_on_topic(&self, topic: &str) -> Vec<PeerId> {
         let topic_hash = IdentTopic::new(topic).hash();
-        self.gossipsub.all_peers()
+        self.gossipsub
+            .all_peers()
             .filter(|(_, topics)| topics.contains(&&topic_hash))
             .map(|(peer_id, _)| *peer_id)
             .collect()
@@ -141,14 +142,18 @@ impl MycelialBehaviour {
     pub fn log_mesh_status(&self, topic: &str) {
         let topic_hash = IdentTopic::new(topic).hash();
         let mesh_peers: Vec<_> = self.gossipsub.mesh_peers(&topic_hash).collect();
-        let all_topic_peers: Vec<_> = self.gossipsub.all_peers()
+        let all_topic_peers: Vec<_> = self
+            .gossipsub
+            .all_peers()
             .filter(|(_, topics)| topics.contains(&&topic_hash))
             .map(|(peer_id, _)| peer_id)
             .collect();
 
         tracing::info!(
             "Mesh status for '{}': {} mesh peers, {} total subscribed peers",
-            topic, mesh_peers.len(), all_topic_peers.len()
+            topic,
+            mesh_peers.len(),
+            all_topic_peers.len()
         );
         for peer in &mesh_peers {
             tracing::debug!("  Mesh peer: {}", peer);
@@ -173,7 +178,11 @@ impl MycelialBehaviour {
     }
 
     /// Store a value in the DHT
-    pub fn put_record(&mut self, key: Vec<u8>, value: Vec<u8>) -> crate::error::Result<kad::QueryId> {
+    pub fn put_record(
+        &mut self,
+        key: Vec<u8>,
+        value: Vec<u8>,
+    ) -> crate::error::Result<kad::QueryId> {
         let record = kad::Record::new(key, value);
         self.kademlia
             .put_record(record, kad::Quorum::One)
@@ -188,7 +197,10 @@ impl MycelialBehaviour {
 }
 
 /// Create a gossipsub behaviour with the given configuration
-fn create_gossipsub(keypair: &Keypair, config: &NetworkConfig) -> crate::error::Result<gossipsub::Behaviour> {
+fn create_gossipsub(
+    keypair: &Keypair,
+    config: &NetworkConfig,
+) -> crate::error::Result<gossipsub::Behaviour> {
     // Message ID function based on content hash
     let message_id_fn = |message: &gossipsub::Message| {
         let mut hasher = Sha256::new();
@@ -208,11 +220,11 @@ fn create_gossipsub(keypair: &Keypair, config: &NetworkConfig) -> crate::error::
         .validation_mode(ValidationMode::Strict)
         .message_id_fn(message_id_fn)
         .max_transmit_size(config.max_message_size)
-        .mesh_outbound_min(0)  // Allow 0 outbound (for 2-node networks)
-        .mesh_n(2)             // Target 2 mesh peers
-        .mesh_n_low(1)         // Minimum 1 peer to maintain mesh
-        .mesh_n_high(4)        // Maximum 4 before pruning
-        .gossip_lazy(2)        // Reduced for smaller networks
+        .mesh_outbound_min(0) // Allow 0 outbound (for 2-node networks)
+        .mesh_n(2) // Target 2 mesh peers
+        .mesh_n_low(1) // Minimum 1 peer to maintain mesh
+        .mesh_n_high(4) // Maximum 4 before pruning
+        .gossip_lazy(2) // Reduced for smaller networks
         .fanout_ttl(Duration::from_secs(60))
         .history_length(5)
         .history_gossip(3)
@@ -241,11 +253,8 @@ fn create_kademlia(local_peer_id: PeerId, _config: &NetworkConfig) -> kad::Behav
 
 /// Create an Identify behaviour
 fn create_identify(keypair: &Keypair) -> identify::Behaviour {
-    let config = identify::Config::new(
-        "/mycelia/1.0.0".to_string(),
-        keypair.public(),
-    )
-    .with_agent_version(format!("mycelia/{}", env!("CARGO_PKG_VERSION")));
+    let config = identify::Config::new("/mycelia/1.0.0".to_string(), keypair.public())
+        .with_agent_version(format!("mycelia/{}", env!("CARGO_PKG_VERSION")));
 
     identify::Behaviour::new(config)
 }
@@ -271,6 +280,15 @@ pub mod topics {
 
     /// Get all standard topics
     pub fn all() -> Vec<&'static str> {
-        vec![CHAT, ANNOUNCE, REPUTATION, CONTENT, ORCHESTRATION, ECONOMICS, GOVERNANCE, SYSTEM]
+        vec![
+            CHAT,
+            ANNOUNCE,
+            REPUTATION,
+            CONTENT,
+            ORCHESTRATION,
+            ECONOMICS,
+            GOVERNANCE,
+            SYSTEM,
+        ]
     }
 }

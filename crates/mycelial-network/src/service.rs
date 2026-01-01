@@ -4,11 +4,7 @@
 //! and provides a high-level API for network operations.
 
 use futures::StreamExt;
-use libp2p::{
-    gossipsub, identify, kad, mdns,
-    swarm::SwarmEvent,
-    Multiaddr, PeerId, Swarm,
-};
+use libp2p::{gossipsub, identify, kad, mdns, swarm::SwarmEvent, Multiaddr, PeerId, Swarm};
 use parking_lot::RwLock;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -18,11 +14,13 @@ use tracing::{debug, info, warn};
 
 use crate::behaviour::{MycelialBehaviour, MycelialBehaviourEvent};
 use crate::config::NetworkConfig;
+#[cfg(feature = "univrs-compat")]
 use crate::enr_bridge::{EnrBridge, CREDIT_TOPIC, ELECTION_TOPIC, GRADIENT_TOPIC, SEPTAL_TOPIC};
 use crate::error::{NetworkError, Result};
 use crate::event::{NetworkEvent, NetworkStats};
 use crate::peer::{ConnectionState, PeerManager};
 use crate::transport::{self, TransportConfig};
+#[cfg(feature = "univrs-compat")]
 use univrs_enr::core::NodeId;
 
 /// Commands sent to the network service
@@ -43,9 +41,13 @@ pub enum NetworkCommand {
     /// Get a value from the DHT
     GetRecord { key: Vec<u8> },
     /// Get connected peers
-    GetPeers { response: tokio::sync::oneshot::Sender<Vec<PeerId>> },
+    GetPeers {
+        response: tokio::sync::oneshot::Sender<Vec<PeerId>>,
+    },
     /// Get network stats
-    GetStats { response: tokio::sync::oneshot::Sender<NetworkStats> },
+    GetStats {
+        response: tokio::sync::oneshot::Sender<NetworkStats>,
+    },
     /// Shutdown
     Shutdown,
 }
@@ -82,7 +84,9 @@ impl NetworkHandle {
     /// Subscribe to a gossipsub topic
     pub async fn subscribe(&self, topic: impl Into<String>) -> Result<()> {
         self.command_tx
-            .send(NetworkCommand::Subscribe { topic: topic.into() })
+            .send(NetworkCommand::Subscribe {
+                topic: topic.into(),
+            })
             .await
             .map_err(|_| NetworkError::Channel("Failed to send subscribe command".into()))
     }
@@ -90,7 +94,9 @@ impl NetworkHandle {
     /// Unsubscribe from a gossipsub topic
     pub async fn unsubscribe(&self, topic: impl Into<String>) -> Result<()> {
         self.command_tx
-            .send(NetworkCommand::Unsubscribe { topic: topic.into() })
+            .send(NetworkCommand::Unsubscribe {
+                topic: topic.into(),
+            })
             .await
             .map_err(|_| NetworkError::Channel("Failed to send unsubscribe command".into()))
     }
@@ -98,7 +104,10 @@ impl NetworkHandle {
     /// Publish a message to a gossipsub topic
     pub async fn publish(&self, topic: impl Into<String>, data: Vec<u8>) -> Result<()> {
         self.command_tx
-            .send(NetworkCommand::Publish { topic: topic.into(), data })
+            .send(NetworkCommand::Publish {
+                topic: topic.into(),
+                data,
+            })
             .await
             .map_err(|_| NetworkError::Channel("Failed to send publish command".into()))
     }
@@ -127,7 +136,8 @@ impl NetworkHandle {
             .await
             .map_err(|_| NetworkError::Channel("Failed to send get_peers command".into()))?;
 
-        rx.await.map_err(|_| NetworkError::Channel("Failed to receive peers".into()))
+        rx.await
+            .map_err(|_| NetworkError::Channel("Failed to receive peers".into()))
     }
 
     /// Get network statistics
@@ -138,7 +148,8 @@ impl NetworkHandle {
             .await
             .map_err(|_| NetworkError::Channel("Failed to send get_stats command".into()))?;
 
-        rx.await.map_err(|_| NetworkError::Channel("Failed to receive stats".into()))
+        rx.await
+            .map_err(|_| NetworkError::Channel("Failed to receive stats".into()))
     }
 
     /// Shutdown the network service
@@ -173,7 +184,8 @@ pub struct NetworkService {
     start_time: Instant,
     /// Running flag
     running: bool,
-    /// ENR bridge for economic primitives
+    /// ENR bridge for economic primitives (requires univrs-compat feature)
+    #[cfg(feature = "univrs-compat")]
     enr_bridge: Arc<EnrBridge>,
 }
 
@@ -214,26 +226,29 @@ impl NetworkService {
             local_peer_id,
         };
 
-        // Create ENR bridge with publish callback
-        // Convert PeerId to NodeId (use peer_id bytes, padded/truncated to 32)
-        let peer_id_bytes = local_peer_id.to_bytes();
-        let mut node_id_bytes = [0u8; 32];
-        let len = peer_id_bytes.len().min(32);
-        node_id_bytes[..len].copy_from_slice(&peer_id_bytes[..len]);
-        let local_node_id = NodeId::from_bytes(node_id_bytes);
+        // Create ENR bridge with publish callback (requires univrs-compat feature)
+        #[cfg(feature = "univrs-compat")]
+        let enr_bridge = {
+            // Convert PeerId to NodeId (use peer_id bytes, padded/truncated to 32)
+            let peer_id_bytes = local_peer_id.to_bytes();
+            let mut node_id_bytes = [0u8; 32];
+            let len = peer_id_bytes.len().min(32);
+            node_id_bytes[..len].copy_from_slice(&peer_id_bytes[..len]);
+            let local_node_id = NodeId::from_bytes(node_id_bytes);
 
-        // Create publish callback that uses the command channel
-        let publish_tx = command_tx.clone();
-        let publish_fn = move |topic: String, data: Vec<u8>| {
-            // Use try_send which is non-blocking and works in any context
-            // This may fail if the channel is full, but that's acceptable
-            // for gossip messages which can be retried
-            publish_tx
-                .try_send(NetworkCommand::Publish { topic, data })
-                .map_err(|e| e.to_string())
+            // Create publish callback that uses the command channel
+            let publish_tx = command_tx.clone();
+            let publish_fn = move |topic: String, data: Vec<u8>| {
+                // Use try_send which is non-blocking and works in any context
+                // This may fail if the channel is full, but that's acceptable
+                // for gossip messages which can be retried
+                publish_tx
+                    .try_send(NetworkCommand::Publish { topic, data })
+                    .map_err(|e| e.to_string())
+            };
+
+            Arc::new(EnrBridge::new(local_node_id, publish_fn))
         };
-
-        let enr_bridge = Arc::new(EnrBridge::new(local_node_id, publish_fn));
 
         let service = Self {
             swarm,
@@ -246,6 +261,7 @@ impl NetworkService {
             stats: Arc::new(RwLock::new(NetworkStats::default())),
             start_time: Instant::now(),
             running: false,
+            #[cfg(feature = "univrs-compat")]
             enr_bridge,
         };
 
@@ -257,7 +273,8 @@ impl NetworkService {
         &self.peer_manager
     }
 
-    /// Get a reference to the ENR bridge for economic operations
+    /// Get a reference to the ENR bridge for economic operations (requires univrs-compat feature)
+    #[cfg(feature = "univrs-compat")]
     pub fn enr_bridge(&self) -> &Arc<EnrBridge> {
         &self.enr_bridge
     }
@@ -268,10 +285,12 @@ impl NetworkService {
 
         // Start listening on configured addresses
         for addr_str in &self.config.listen_addresses.clone() {
-            let addr: Multiaddr = addr_str.parse()
+            let addr: Multiaddr = addr_str
+                .parse()
                 .map_err(|e| NetworkError::InvalidMultiaddr(format!("{}: {}", addr_str, e)))?;
 
-            self.swarm.listen_on(addr.clone())
+            self.swarm
+                .listen_on(addr.clone())
                 .map_err(|e| NetworkError::ListenFailed {
                     address: addr_str.clone(),
                     reason: e.to_string(),
@@ -284,7 +303,8 @@ impl NetworkService {
         // Note: mesh_n=2, mesh_n_low=1 configured for small test networks
         info!("Gossipsub config: mesh_outbound_min=0, mesh_n=2, mesh_n_low=1, mesh_n_high=4 (optimized for small networks)");
 
-        let topics = [
+        // Core topics always subscribed
+        let core_topics = [
             // Core messaging topics
             "/mycelial/1.0.0/chat",
             "/mycelial/1.0.0/announce",
@@ -295,21 +315,37 @@ impl NetworkService {
             "/mycelial/1.0.0/credit",     // Mutual credit transactions
             "/mycelial/1.0.0/governance", // Proposals and voting
             "/mycelial/1.0.0/resource",   // Resource sharing metrics
-            // ENR bridge topics (gradient, credits, election, septal)
-            GRADIENT_TOPIC,               // Resource gradient broadcasts
-            CREDIT_TOPIC,                 // Credit transfers
-            ELECTION_TOPIC,               // Nexus election
-            SEPTAL_TOPIC,                 // Septal gate (circuit breaker)
         ];
+
+        // ENR bridge topics (only with univrs-compat feature)
+        #[cfg(feature = "univrs-compat")]
+        let enr_topics = [
+            GRADIENT_TOPIC, // Resource gradient broadcasts
+            CREDIT_TOPIC,   // Credit transfers
+            ELECTION_TOPIC, // Nexus election
+            SEPTAL_TOPIC,   // Septal gate (circuit breaker)
+        ];
+        #[cfg(not(feature = "univrs-compat"))]
+        let enr_topics: [&str; 0] = [];
+
+        // Combine all topics
+        let topics: Vec<&str> = core_topics
+            .iter()
+            .copied()
+            .chain(enr_topics.iter().copied())
+            .collect();
         for topic_str in topics {
             let topic = libp2p::gossipsub::IdentTopic::new(topic_str);
             match self.swarm.behaviour_mut().gossipsub.subscribe(&topic) {
                 Ok(true) => {
-                    info!("Subscribed to topic: {} (awaiting mesh formation)", topic_str);
+                    info!(
+                        "Subscribed to topic: {} (awaiting mesh formation)",
+                        topic_str
+                    );
                     self.subscribed_topics.insert(topic_str.to_string());
                     // Emit event so AppState gets updated
                     let _ = self.event_tx.send(NetworkEvent::Subscribed {
-                        topic: topic_str.to_string()
+                        topic: topic_str.to_string(),
                     });
                 }
                 Ok(false) => debug!("Already subscribed to: {}", topic_str),
@@ -389,7 +425,8 @@ impl NetworkService {
             } => {
                 debug!("Connection established with {}", peer_id);
 
-                self.peer_manager.set_state(peer_id, ConnectionState::Connected);
+                self.peer_manager
+                    .set_state(peer_id, ConnectionState::Connected);
 
                 let addr = endpoint.get_remote_address();
                 self.peer_manager.add_address(peer_id, addr.clone());
@@ -417,7 +454,8 @@ impl NetworkService {
                 debug!("Connection closed with {}: {:?}", peer_id, cause);
 
                 if num_established == 0 {
-                    self.peer_manager.set_state(peer_id, ConnectionState::Disconnected);
+                    self.peer_manager
+                        .set_state(peer_id, ConnectionState::Disconnected);
 
                     let _ = self.event_tx.send(NetworkEvent::PeerDisconnected {
                         peer_id,
@@ -445,7 +483,10 @@ impl NetworkService {
                     let current_state = self.peer_manager.get_state(&peer_id);
                     match current_state {
                         Some(ConnectionState::Connected) | Some(ConnectionState::Connecting) => {
-                            debug!("Ignoring dial error for peer {} (state: {:?})", peer_id, current_state);
+                            debug!(
+                                "Ignoring dial error for peer {} (state: {:?})",
+                                peer_id, current_state
+                            );
                         }
                         _ => {
                             // Check if we're actually connected to this peer via the swarm
@@ -453,7 +494,8 @@ impl NetworkService {
                                 debug!("Ignoring dial error for swarm-connected peer {}", peer_id);
                             } else {
                                 warn!("Dial error for {}: {:?}", peer_id, error);
-                                self.peer_manager.set_state(peer_id, ConnectionState::Failed);
+                                self.peer_manager
+                                    .set_state(peer_id, ConnectionState::Failed);
                             }
                         }
                     }
@@ -465,9 +507,13 @@ impl NetworkService {
                 });
             }
 
-            SwarmEvent::Dialing { peer_id: Some(peer_id), .. } => {
+            SwarmEvent::Dialing {
+                peer_id: Some(peer_id),
+                ..
+            } => {
                 debug!("Dialing {}", peer_id);
-                self.peer_manager.set_state(peer_id, ConnectionState::Connecting);
+                self.peer_manager
+                    .set_state(peer_id, ConnectionState::Connecting);
                 let _ = self.event_tx.send(NetworkEvent::Dialing { peer_id });
             }
             SwarmEvent::Dialing { peer_id: None, .. } => {}
@@ -496,7 +542,8 @@ impl NetworkService {
                     stats.bytes_received += message.data.len() as u64;
                 }
 
-                // Route ENR messages to the bridge handler
+                // Route ENR messages to the bridge handler (requires univrs-compat feature)
+                #[cfg(feature = "univrs-compat")]
                 if topic_str == GRADIENT_TOPIC
                     || topic_str == CREDIT_TOPIC
                     || topic_str == ELECTION_TOPIC
@@ -528,7 +575,10 @@ impl NetworkService {
 
                 info!(
                     "Peer {} subscribed to '{}' | Mesh peers: {} | Total subscribed: {}",
-                    peer_id, topic_str, mesh_peers.len(), all_peers.len()
+                    peer_id,
+                    topic_str,
+                    mesh_peers.len(),
+                    all_peers.len()
                 );
 
                 if !mesh_peers.is_empty() {
@@ -541,13 +591,18 @@ impl NetworkService {
                 });
             }
 
-            MycelialBehaviourEvent::Gossipsub(gossipsub::Event::Unsubscribed { peer_id, topic }) => {
+            MycelialBehaviourEvent::Gossipsub(gossipsub::Event::Unsubscribed {
+                peer_id,
+                topic,
+            }) => {
                 let topic_str = topic.to_string();
                 let mesh_peers = self.swarm.behaviour().mesh_peers(&topic_str);
 
                 info!(
                     "Peer {} unsubscribed from '{}' | Remaining mesh peers: {}",
-                    peer_id, topic_str, mesh_peers.len()
+                    peer_id,
+                    topic_str,
+                    mesh_peers.len()
                 );
 
                 let _ = self.event_tx.send(NetworkEvent::PeerUnsubscribed {
@@ -556,7 +611,9 @@ impl NetworkService {
                 });
             }
 
-            MycelialBehaviourEvent::Identify(identify::Event::Received { peer_id, info, .. }) => {
+            MycelialBehaviourEvent::Identify(identify::Event::Received {
+                peer_id, info, ..
+            }) => {
                 debug!("Identified peer {}: {:?}", peer_id, info.agent_version);
 
                 self.peer_manager.set_identify_info(
@@ -570,7 +627,9 @@ impl NetworkService {
                 // This avoids adding unreachable Docker/WSL addresses in test environments
                 for addr in &info.listen_addrs {
                     if is_routable_address(addr) {
-                        self.swarm.behaviour_mut().add_address(&peer_id, addr.clone());
+                        self.swarm
+                            .behaviour_mut()
+                            .add_address(&peer_id, addr.clone());
                     } else {
                         debug!("Skipping non-routable address for {}: {}", peer_id, addr);
                     }
@@ -601,9 +660,9 @@ impl NetworkService {
                 ..
             }) => {
                 debug!("Stored DHT record: {:?}", key);
-                let _ = self.event_tx.send(NetworkEvent::RecordStored {
-                    key: key.to_vec(),
-                });
+                let _ = self
+                    .event_tx
+                    .send(NetworkEvent::RecordStored { key: key.to_vec() });
             }
 
             MycelialBehaviourEvent::Mdns(mdns::Event::Discovered(peers)) => {
@@ -613,18 +672,24 @@ impl NetworkService {
                     .into_iter()
                     .map(|(peer_id, addr)| {
                         self.peer_manager.add_address(peer_id, addr.clone());
-                        self.swarm.behaviour_mut().add_address(&peer_id, addr.clone());
+                        self.swarm
+                            .behaviour_mut()
+                            .add_address(&peer_id, addr.clone());
                         (peer_id, addr)
                     })
                     .collect();
 
-                let _ = self.event_tx.send(NetworkEvent::MdnsDiscovered { peers: discovered });
+                let _ = self
+                    .event_tx
+                    .send(NetworkEvent::MdnsDiscovered { peers: discovered });
             }
 
             MycelialBehaviourEvent::Mdns(mdns::Event::Expired(peers)) => {
                 debug!("mDNS expired {} peers", peers.len());
                 let expired: Vec<_> = peers.into_iter().map(|(peer_id, _)| peer_id).collect();
-                let _ = self.event_tx.send(NetworkEvent::MdnsExpired { peers: expired });
+                let _ = self
+                    .event_tx
+                    .send(NetworkEvent::MdnsExpired { peers: expired });
             }
 
             _ => {}
@@ -671,14 +736,18 @@ impl NetworkService {
 
                 info!(
                     "Publishing to '{}' | {} bytes | Mesh peers: {} | Total subscribers: {}",
-                    topic, data.len(), mesh_peers.len(), all_peers.len()
+                    topic,
+                    data.len(),
+                    mesh_peers.len(),
+                    all_peers.len()
                 );
 
                 if mesh_peers.is_empty() && !all_peers.is_empty() {
                     warn!(
                         "Warning: Publishing to '{}' with 0 mesh peers but {} subscribed peers. \
                         Mesh may not have formed yet (check mesh_n/mesh_n_low config).",
-                        topic, all_peers.len()
+                        topic,
+                        all_peers.len()
                     );
                 }
 
@@ -688,7 +757,12 @@ impl NetworkService {
 
                 match self.swarm.behaviour_mut().publish(&topic, data.clone()) {
                     Ok(msg_id) => {
-                        info!("Published message {} to '{}' via {} mesh peers", msg_id, topic, mesh_peers.len());
+                        info!(
+                            "Published message {} to '{}' via {} mesh peers",
+                            msg_id,
+                            topic,
+                            mesh_peers.len()
+                        );
                         let mut stats = self.stats.write();
                         stats.messages_sent += 1;
                         stats.bytes_sent += data.len() as u64;
