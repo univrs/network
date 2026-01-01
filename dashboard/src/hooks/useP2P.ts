@@ -364,7 +364,16 @@ export function useP2P(options: UseP2POptions = {}) {
 
       // Economics message handlers
       case 'vouch_request': {
-        const vouch = (message.data || message) as VouchRequest;
+        // Server sends: voucher, vouchee, weight; Client type uses: fromPeerId, toPeerId, stake
+        type ServerVouch = { voucher?: string; vouchee?: string; weight?: number; fromPeerId?: string; toPeerId?: string; stake?: number; message?: string; timestamp?: number };
+        const raw = (message.data || message) as ServerVouch;
+        const vouch: VouchRequest = {
+          fromPeerId: raw.voucher || raw.fromPeerId || '',
+          toPeerId: raw.vouchee || raw.toPeerId || '',
+          stake: raw.weight ?? raw.stake ?? 0,
+          message: raw.message,
+          timestamp: raw.timestamp || Date.now(),
+        };
         setState(s => ({
           ...s,
           vouches: [...s.vouches, vouch],
