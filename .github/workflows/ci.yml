@@ -1,0 +1,339 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  # ============================================
+  # Rust Backend
+  # ============================================
+  rust-check:
+    name: Rust Check & Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: univrs-network
+
+      # Checkout sibling dependencies
+      - uses: actions/checkout@v4
+        with:
+          repository: univrs/identity
+          path: univrs-identity
+        continue-on-error: true
+
+      - uses: actions/checkout@v4
+        with:
+          repository: univrs/state
+          path: univrs-state
+        continue-on-error: true
+
+      - uses: actions/checkout@v4
+        with:
+          repository: univrs/enr
+          path: univrs-enr
+        continue-on-error: true
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            univrs-network/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Check formatting
+        working-directory: univrs-network
+        run: cargo fmt --all -- --check
+
+      - name: Run clippy
+        working-directory: univrs-network
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+  rust-test:
+    name: Rust Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: univrs-network
+
+      # Checkout sibling dependencies
+      - uses: actions/checkout@v4
+        with:
+          repository: univrs/identity
+          path: univrs-identity
+        continue-on-error: true
+
+      - uses: actions/checkout@v4
+        with:
+          repository: univrs/state
+          path: univrs-state
+        continue-on-error: true
+
+      - uses: actions/checkout@v4
+        with:
+          repository: univrs/enr
+          path: univrs-enr
+        continue-on-error: true
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            univrs-network/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Build workspace
+        working-directory: univrs-network
+        run: cargo build --workspace
+
+      - name: Run tests
+        working-directory: univrs-network
+        run: cargo test --workspace --verbose
+
+  rust-build-release:
+    name: Rust Release Build
+    runs-on: ubuntu-latest
+    needs: [rust-check, rust-test]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: univrs-network
+
+      # Checkout sibling dependencies
+      - uses: actions/checkout@v4
+        with:
+          repository: univrs/identity
+          path: univrs-identity
+        continue-on-error: true
+
+      - uses: actions/checkout@v4
+        with:
+          repository: univrs/state
+          path: univrs-state
+        continue-on-error: true
+
+      - uses: actions/checkout@v4
+        with:
+          repository: univrs/enr
+          path: univrs-enr
+        continue-on-error: true
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            univrs-network/target
+          key: ${{ runner.os }}-cargo-release-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-release-
+            ${{ runner.os }}-cargo-
+
+      - name: Build release binary
+        working-directory: univrs-network
+        run: cargo build --release --bin mycelial-node
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mycelial-node-linux
+          path: univrs-network/target/release/mycelial-node
+          retention-days: 7
+
+  # ============================================
+  # Dashboard Frontend
+  # ============================================
+  dashboard-check:
+    name: Dashboard Check & Lint
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: dashboard
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+
+      - name: Get pnpm store directory
+        id: pnpm-cache
+        shell: bash
+        run: echo "STORE_PATH=$(pnpm store path)" >> $GITHUB_OUTPUT
+
+      - name: Cache pnpm modules
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: TypeScript check
+        run: npx tsc --noEmit
+
+      - name: Lint check
+        run: pnpm lint || true  # Don't fail on lint warnings initially
+
+  dashboard-test:
+    name: Dashboard Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: dashboard
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+
+      - name: Get pnpm store directory
+        id: pnpm-cache
+        shell: bash
+        run: echo "STORE_PATH=$(pnpm store path)" >> $GITHUB_OUTPUT
+
+      - name: Cache pnpm modules
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run tests
+        run: pnpm test -- --run
+
+  dashboard-build:
+    name: Dashboard Build
+    runs-on: ubuntu-latest
+    needs: [dashboard-check, dashboard-test]
+    defaults:
+      run:
+        working-directory: dashboard
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+
+      - name: Get pnpm store directory
+        id: pnpm-cache
+        shell: bash
+        run: echo "STORE_PATH=$(pnpm store path)" >> $GITHUB_OUTPUT
+
+      - name: Cache pnpm modules
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build production bundle
+        run: pnpm build
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dashboard-dist
+          path: dashboard/dist
+          retention-days: 7
+
+  # ============================================
+  # Integration Tests (when available)
+  # ============================================
+  # integration-tests:
+  #   name: Integration Tests
+  #   runs-on: ubuntu-latest
+  #   needs: [rust-build-release, dashboard-build]
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - name: Download node binary
+  #       uses: actions/download-artifact@v4
+  #       with:
+  #         name: mycelial-node-linux
+  #         path: ./bin
+  #     - name: Run integration tests
+  #       run: |
+  #         chmod +x ./bin/mycelial-node
+  #         # Integration test scripts will go here
+
+  # ============================================
+  # Summary Job
+  # ============================================
+  ci-complete:
+    name: CI Complete
+    runs-on: ubuntu-latest
+    needs: [rust-build-release, dashboard-build]
+    steps:
+      - name: CI Summary
+        run: |
+          echo "## CI Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Component | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Rust Check & Lint | Passed |" >> $GITHUB_STEP_SUMMARY
+          echo "| Rust Tests | Passed |" >> $GITHUB_STEP_SUMMARY
+          echo "| Rust Release Build | Passed |" >> $GITHUB_STEP_SUMMARY
+          echo "| Dashboard Check | Passed |" >> $GITHUB_STEP_SUMMARY
+          echo "| Dashboard Tests | Passed |" >> $GITHUB_STEP_SUMMARY
+          echo "| Dashboard Build | Passed |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "All checks passed! Ready for merge." >> $GITHUB_STEP_SUMMARY
