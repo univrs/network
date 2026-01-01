@@ -127,7 +127,7 @@ jobs:
       github.event.inputs.deploy_target == 'oracle'
     environment:
       name: oracle-production
-      url: http://${{ secrets.ORACLE_HOST }}
+      # Note: URL cannot use secrets; will be visible in deployment logs
     steps:
       - name: Deploy to Oracle VM
         uses: appleboy/ssh-action@v1.0.3
@@ -181,7 +181,7 @@ jobs:
       github.event.inputs.deploy_target == 'azure'
     environment:
       name: azure-production
-      url: http://${{ secrets.AZURE_HOST }}:8080
+      # Note: URL cannot use secrets; will be visible in deployment logs
     steps:
       - name: Deploy to Azure VM
         uses: appleboy/ssh-action@v1.0.3
@@ -226,7 +226,7 @@ jobs:
       github.event.inputs.deploy_target == 'aws'
     environment:
       name: aws-production
-      url: http://${{ secrets.AWS_HOST }}:8080
+      # Note: URL cannot use secrets; will be visible in deployment logs
     steps:
       - name: Deploy to AWS EC2
         uses: appleboy/ssh-action@v1.0.3
