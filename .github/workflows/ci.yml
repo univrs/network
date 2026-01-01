@@ -19,6 +19,27 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          path: univrs-network
+
+      # Checkout sibling dependencies
+      - uses: actions/checkout@v4
+        with:
+          repository: univrs/identity
+          path: univrs-identity
+        continue-on-error: true
+
+      - uses: actions/checkout@v4
+        with:
+          repository: univrs/state
+          path: univrs-state
+        continue-on-error: true
+
+      - uses: actions/checkout@v4
+        with:
+          repository: univrs/enr
+          path: univrs-enr
+        continue-on-error: true
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -31,15 +52,17 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            target
+            univrs-network/target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
 
       - name: Check formatting
+        working-directory: univrs-network
         run: cargo fmt --all -- --check
 
       - name: Run clippy
+        working-directory: univrs-network
         run: cargo clippy --workspace --all-targets -- -D warnings
 
   rust-test:
@@ -47,6 +70,27 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          path: univrs-network
+
+      # Checkout sibling dependencies
+      - uses: actions/checkout@v4
+        with:
+          repository: univrs/identity
+          path: univrs-identity
+        continue-on-error: true
+
+      - uses: actions/checkout@v4
+        with:
+          repository: univrs/state
+          path: univrs-state
+        continue-on-error: true
+
+      - uses: actions/checkout@v4
+        with:
+          repository: univrs/enr
+          path: univrs-enr
+        continue-on-error: true
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -57,15 +101,17 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            target
+            univrs-network/target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
 
       - name: Build workspace
+        working-directory: univrs-network
         run: cargo build --workspace
 
       - name: Run tests
+        working-directory: univrs-network
         run: cargo test --workspace --verbose
 
   rust-build-release:
@@ -74,6 +120,27 @@ jobs:
     needs: [rust-check, rust-test]
     steps:
       - uses: actions/checkout@v4
+        with:
+          path: univrs-network
+
+      # Checkout sibling dependencies
+      - uses: actions/checkout@v4
+        with:
+          repository: univrs/identity
+          path: univrs-identity
+        continue-on-error: true
+
+      - uses: actions/checkout@v4
+        with:
+          repository: univrs/state
+          path: univrs-state
+        continue-on-error: true
+
+      - uses: actions/checkout@v4
+        with:
+          repository: univrs/enr
+          path: univrs-enr
+        continue-on-error: true
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -84,20 +151,21 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            target
+            univrs-network/target
           key: ${{ runner.os }}-cargo-release-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-release-
             ${{ runner.os }}-cargo-
 
       - name: Build release binary
+        working-directory: univrs-network
         run: cargo build --release --bin mycelial-node
 
       - name: Upload binary artifact
         uses: actions/upload-artifact@v4
         with:
           name: mycelial-node-linux
-          path: target/release/mycelial-node
+          path: univrs-network/target/release/mycelial-node
           retention-days: 7
 
   # ============================================

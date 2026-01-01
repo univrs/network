@@ -27,3 +27,6 @@ humantime = "2.1"
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util", "macros"] }
+
+[lints]
+workspace = true

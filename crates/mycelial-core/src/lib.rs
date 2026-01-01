@@ -143,7 +143,8 @@ mod tests {
 
     #[test]
     fn test_version() {
-        assert!(!VERSION.is_empty());
+        // VERSION is set at compile time from Cargo.toml
+        assert!(VERSION.contains('.'), "VERSION should be semver format");
     }
 
     #[test]

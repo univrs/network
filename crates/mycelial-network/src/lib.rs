@@ -77,8 +77,9 @@ pub use service::{NetworkCommand, NetworkHandle, NetworkService};
 pub use transport::{TransportConfig, create_transport, parse_multiaddr, extract_peer_id};
 
 // Test utilities - available with test-utils feature or in tests
-#[cfg(any(test, feature = "test-utils"))]
-pub use service::test_utils;
+// TODO: Add test_utils module to service when needed
+// #[cfg(any(test, feature = "test-utils"))]
+// pub use service::test_utils;
 
 // Re-export libp2p types commonly used
 pub use libp2p::identity::Keypair;

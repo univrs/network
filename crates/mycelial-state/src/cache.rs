@@ -196,7 +196,7 @@ impl MessageCache {
         let mut by_sender = self.by_sender.write();
         by_sender
             .entry(sender)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(id);
     }
 
@@ -296,8 +296,8 @@ impl CreditCache {
 
         // Update peer index
         let mut by_peer = self.by_peer.write();
-        by_peer.entry(creditor).or_insert_with(Vec::new).push(id.clone());
-        by_peer.entry(debtor).or_insert_with(Vec::new).push(id);
+        by_peer.entry(creditor).or_default().push(id.clone());
+        by_peer.entry(debtor).or_default().push(id);
     }
 
     /// Remove a relationship
