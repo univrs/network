@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 /// Main node configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct NodeConfig {
     /// Node identity configuration
     pub identity: IdentityConfig,
@@ -22,34 +22,13 @@ pub struct NodeConfig {
     pub logging: LoggingConfig,
 }
 
-impl Default for NodeConfig {
-    fn default() -> Self {
-        Self {
-            identity: IdentityConfig::default(),
-            network: NetworkConfig::default(),
-            storage: StorageConfig::default(),
-            modules: ModulesConfig::default(),
-            logging: LoggingConfig::default(),
-        }
-    }
-}
-
 /// Identity configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct IdentityConfig {
     /// Path to the keypair file (None = generate new)
     pub keypair_path: Option<PathBuf>,
     /// Human-readable node name
     pub name: Option<String>,
-}
-
-impl Default for IdentityConfig {
-    fn default() -> Self {
-        Self {
-            keypair_path: None,
-            name: None,
-        }
-    }
 }
 
 /// Network configuration

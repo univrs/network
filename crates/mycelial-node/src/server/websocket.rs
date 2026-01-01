@@ -47,7 +47,7 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
             let entries: Vec<PeerListEntry> = peers.into_iter().map(Into::into).collect();
             let init_msg = WsMessage::PeersList { peers: entries };
             if let Ok(json) = serde_json::to_string(&init_msg) {
-                let _ = sender.send(Message::Text(json.into())).await;
+                let _ = sender.send(Message::Text(json)).await;
             }
         }
         Err(e) => {
@@ -59,7 +59,7 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
     let mut send_task = tokio::spawn(async move {
         while let Ok(event) = event_rx.recv().await {
             if let Ok(json) = serde_json::to_string(&event) {
-                if sender.send(Message::Text(json.into())).await.is_err() {
+                if sender.send(Message::Text(json)).await.is_err() {
                     break;
                 }
             }

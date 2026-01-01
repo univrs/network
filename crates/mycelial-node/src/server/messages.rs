@@ -383,6 +383,7 @@ pub enum ClientMessage {
         /// Room ID to join
         room_id: String,
         /// Optional room name hint (for discovery)
+        #[allow(dead_code)]
         room_name: Option<String>,
     },
 

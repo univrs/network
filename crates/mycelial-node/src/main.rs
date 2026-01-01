@@ -123,14 +123,16 @@ async fn main() -> anyhow::Result<()> {
 
     // Configure network
     // Port 0 tells the OS to assign an available port automatically
-    let mut config = NetworkConfig::default();
-    config.listen_addresses = vec![
-        format!("/ip4/0.0.0.0/tcp/{}", p2p_port),
-        format!(
-            "/ip4/0.0.0.0/udp/{}/quic-v1",
-            if p2p_port == 0 { 0 } else { p2p_port + 1 }
-        ),
-    ];
+    let mut config = NetworkConfig {
+        listen_addresses: vec![
+            format!("/ip4/0.0.0.0/tcp/{}", p2p_port),
+            format!(
+                "/ip4/0.0.0.0/udp/{}/quic-v1",
+                if p2p_port == 0 { 0 } else { p2p_port + 1 }
+            ),
+        ],
+        ..Default::default()
+    };
 
     if p2p_port == 0 {
         info!("P2P port: auto-assign (OS will select available port)");
@@ -610,11 +612,16 @@ async fn handle_network_event(event: NetworkEvent, state: &AppState, local_peer_
             info!("Network stopped");
         }
 
-        NetworkEvent::DialFailed { peer_id, error } => {
-            if let Some(pid) = peer_id {
-                warn!("Failed to dial {}: {}", pid, error);
-            }
+        NetworkEvent::DialFailed {
+            peer_id: Some(pid),
+            error,
+        } => {
+            warn!("Failed to dial {}: {}", pid, error);
         }
+        NetworkEvent::DialFailed {
+            peer_id: None,
+            error: _,
+        } => {}
 
         NetworkEvent::MdnsDiscovered { peers } => {
             for (peer_id, addr) in &peers {

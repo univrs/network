@@ -485,14 +485,16 @@ impl NetworkService {
                 });
             }
 
-            SwarmEvent::Dialing { peer_id, .. } => {
-                if let Some(peer_id) = peer_id {
-                    debug!("Dialing {}", peer_id);
-                    self.peer_manager
-                        .set_state(peer_id, ConnectionState::Connecting);
-                    let _ = self.event_tx.send(NetworkEvent::Dialing { peer_id });
-                }
+            SwarmEvent::Dialing {
+                peer_id: Some(peer_id),
+                ..
+            } => {
+                debug!("Dialing {}", peer_id);
+                self.peer_manager
+                    .set_state(peer_id, ConnectionState::Connecting);
+                let _ = self.event_tx.send(NetworkEvent::Dialing { peer_id });
             }
+            SwarmEvent::Dialing { peer_id: None, .. } => {}
 
             _ => {}
         }

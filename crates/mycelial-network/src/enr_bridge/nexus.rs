@@ -128,7 +128,7 @@ impl ActiveElection {
     /// Check if we have enough votes for a valid election
     pub fn has_quorum(&self) -> bool {
         if self.participants.is_empty() {
-            return self.votes.len() >= 1;
+            return !self.votes.is_empty();
         }
         let required = (self.participants.len() as f64 * MIN_VOTE_FRACTION).ceil() as usize;
         self.votes.len() >= required.max(1)

@@ -7,9 +7,8 @@ use wasm_bindgen::prelude::*;
 /// Initialize the WASM module
 #[wasm_bindgen(start)]
 pub fn init() {
-    // Set up console error panic hook for better error messages
-    #[cfg(feature = "console_error_panic_hook")]
-    console_error_panic_hook::set_once();
+    // WASM module initialization placeholder
+    // Console error panic hook can be added when needed
 }
 
 /// Example function exposed to JavaScript
