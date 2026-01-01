@@ -8,6 +8,10 @@ interface ElectionPanelProps {
   elections: Map<number, Election>;
   localPeerId?: string | null;
   onClose?: () => void;
+  // Action props for interactive controls
+  onStartElection?: (regionId: string) => void;
+  onRegisterCandidacy?: (electionId: number, uptime: number, cpuAvailable: number, memoryAvailable: number, reputation: number) => void;
+  onVoteElection?: (electionId: number, candidate: string) => void;
 }
 
 function formatTimestamp(ts: number): string {
@@ -90,10 +94,12 @@ function CandidateCard({ candidate, isWinner, voteCount }: {
   );
 }
 
-function ElectionCard({ election, isExpanded, onToggle }: {
+function ElectionCard({ election, isExpanded, onToggle, onVoteElection, onRegisterCandidacy }: {
   election: Election;
   isExpanded: boolean;
   onToggle: () => void;
+  onVoteElection?: (electionId: number, candidate: string) => void;
+  onRegisterCandidacy?: (electionId: number, uptime: number, cpuAvailable: number, memoryAvailable: number, reputation: number) => void;
 }) {
   const votesByCandidate = useMemo(() => {
     const counts = new Map<string, number>();
@@ -223,6 +229,37 @@ function ElectionCard({ election, isExpanded, onToggle }: {
             </div>
           )}
 
+          {/* Vote buttons for active voting elections */}
+          {election.status === 'voting' && onVoteElection && election.candidates.length > 0 && (
+            <div className="mt-3 flex gap-2">
+              {election.candidates.map(candidate => (
+                <button
+                  key={candidate.candidate}
+                  onClick={() => onVoteElection(election.id, candidate.candidate)}
+                  className="flex-1 px-3 py-2 rounded bg-glow-cyan/20 text-glow-cyan hover:bg-glow-cyan/30 transition-colors text-xs font-display"
+                >
+                  Vote for {shortenNodeId(candidate.candidate)}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Register as candidate for announced elections */}
+          {election.status === 'announced' && onRegisterCandidacy && (
+            <button
+              onClick={() => onRegisterCandidacy(
+                election.id,
+                3600 * 24, // 24h uptime placeholder
+                0.8,       // 80% CPU available
+                0.7,       // 70% memory available
+                0.5        // 0.5 reputation
+              )}
+              className="mt-3 w-full px-3 py-2 rounded bg-glow-gold/20 text-glow-gold hover:bg-glow-gold/30 transition-colors text-sm font-display"
+            >
+              Register as Candidate
+            </button>
+          )}
+
           {/* Initiator info */}
           <div className="text-xs text-soft-gray">
             Initiated by {shortenNodeId(election.initiator)}
@@ -237,6 +274,9 @@ export function ElectionPanel({
   elections,
   localPeerId: _localPeerId,
   onClose,
+  onStartElection,
+  onRegisterCandidacy,
+  onVoteElection,
 }: ElectionPanelProps) {
   // Separate active and completed elections
   const { activeElections, completedElections } = useMemo(() => {
@@ -271,13 +311,29 @@ export function ElectionPanel({
         <div className="relative px-6 py-4 bg-deep-earth border-b border-border-subtle">
           <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-spore-purple via-glow-cyan to-glow-gold" />
           <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-xl font-display font-bold text-mycelium-white">
-                Nexus Elections
-              </h2>
-              <p className="text-sm text-soft-gray font-body">
-                Region coordinator selection and voting
-              </p>
+            <div className="flex items-center gap-4">
+              <div>
+                <h2 className="text-xl font-display font-bold text-mycelium-white">
+                  Nexus Elections
+                </h2>
+                <p className="text-sm text-soft-gray font-body">
+                  Region coordinator selection and voting
+                </p>
+              </div>
+              {onStartElection && (
+                <button
+                  onClick={() => {
+                    const regionId = prompt('Enter region ID for election:');
+                    if (regionId) onStartElection(regionId);
+                  }}
+                  className="px-3 py-1.5 rounded-lg bg-spore-purple/20 text-spore-purple hover:bg-spore-purple/30 transition-colors text-sm font-display flex items-center gap-1.5"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M12 5v14M5 12h14" />
+                  </svg>
+                  Start Election
+                </button>
+              )}
             </div>
             {onClose && (
               <button
@@ -326,6 +382,8 @@ export function ElectionPanel({
                         election={election}
                         isExpanded={expandedIds.has(election.id)}
                         onToggle={() => {}} // Active elections stay expanded
+                        onVoteElection={onVoteElection}
+                        onRegisterCandidacy={onRegisterCandidacy}
                       />
                     ))}
                   </div>
@@ -345,6 +403,8 @@ export function ElectionPanel({
                         election={election}
                         isExpanded={false}
                         onToggle={() => {}} // Can add state for manual expand
+                        onVoteElection={onVoteElection}
+                        onRegisterCandidacy={onRegisterCandidacy}
                       />
                     ))}
                   </div>

@@ -1089,6 +1089,98 @@ export function useP2P(options: UseP2POptions = {}) {
     }));
   }, [state.localPeerId]);
 
+  // ============ ENR Bridge Functions ============
+
+  // Report resource gradient (availability)
+  const reportGradient = useCallback((
+    cpuAvailable: number,
+    memoryAvailable: number,
+    bandwidthAvailable: number,
+    storageAvailable: number
+  ) => {
+    if (wsRef.current?.readyState !== WebSocket.OPEN) {
+      console.warn('WebSocket not open for gradient report');
+      return;
+    }
+    const message = JSON.stringify({
+      type: 'report_gradient',
+      cpu_available: cpuAvailable,
+      memory_available: memoryAvailable,
+      bandwidth_available: bandwidthAvailable,
+      storage_available: storageAvailable,
+    });
+    wsRef.current.send(message);
+    console.log('Sent gradient report');
+  }, []);
+
+  // Start a nexus election for a region
+  const startElection = useCallback((regionId: string) => {
+    if (wsRef.current?.readyState !== WebSocket.OPEN) {
+      console.warn('WebSocket not open for starting election');
+      return;
+    }
+    const message = JSON.stringify({
+      type: 'start_election',
+      region_id: regionId,
+    });
+    wsRef.current.send(message);
+    console.log('Started election for region:', regionId);
+  }, []);
+
+  // Register as an election candidate
+  const registerCandidacy = useCallback((
+    electionId: number,
+    uptime: number,
+    cpuAvailable: number,
+    memoryAvailable: number,
+    reputation: number
+  ) => {
+    if (wsRef.current?.readyState !== WebSocket.OPEN) {
+      console.warn('WebSocket not open for registering candidacy');
+      return;
+    }
+    const message = JSON.stringify({
+      type: 'register_candidacy',
+      election_id: electionId,
+      uptime,
+      cpu_available: cpuAvailable,
+      memory_available: memoryAvailable,
+      reputation,
+    });
+    wsRef.current.send(message);
+    console.log('Registered candidacy for election:', electionId);
+  }, []);
+
+  // Vote for a candidate in an election
+  const voteElection = useCallback((electionId: number, candidate: string) => {
+    if (wsRef.current?.readyState !== WebSocket.OPEN) {
+      console.warn('WebSocket not open for election vote');
+      return;
+    }
+    const message = JSON.stringify({
+      type: 'vote_election',
+      election_id: electionId,
+      candidate,
+    });
+    wsRef.current.send(message);
+    console.log('Voted in election:', electionId, 'for candidate:', candidate);
+  }, []);
+
+  // Send ENR credits to another node
+  const sendEnrCredit = useCallback((to: string, amount: number) => {
+    if (wsRef.current?.readyState !== WebSocket.OPEN) {
+      console.warn('WebSocket not open for ENR credit transfer');
+      return;
+    }
+    const message = JSON.stringify({
+      type: 'send_enr_credit',
+      to,
+      amount,
+    });
+    wsRef.current.send(message);
+    console.log('Sent ENR credit:', amount, 'to:', to);
+  }, []);
+
   // Disconnect from WebSocket
   const disconnect = useCallback(() => {
     if (reconnectTimerRef.current) {
@@ -1169,6 +1261,12 @@ export function useP2P(options: UseP2POptions = {}) {
     sendProposal,
     sendVote,
     sendResourceContribution,
+    // ENR Bridge functions
+    reportGradient,
+    startElection,
+    registerCandidacy,
+    voteElection,
+    sendEnrCredit,
   };
 }
 

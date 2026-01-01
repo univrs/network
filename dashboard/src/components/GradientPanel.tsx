@@ -1,13 +1,14 @@
 // src/components/GradientPanel.tsx
 // Displays network-wide resource gradients from ENR bridge
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import type { GradientUpdate, NodeEnrState } from '@/types';
 
 interface GradientPanelProps {
   gradients: Map<string, GradientUpdate>;
   nodeEnrStates: Map<string, NodeEnrState>;
   onClose?: () => void;
+  onReportGradient?: (cpu: number, mem: number, bw: number, storage: number) => void;
 }
 
 function formatPercent(value: number): string {
@@ -42,7 +43,27 @@ export function GradientPanel({
   gradients,
   nodeEnrStates,
   onClose,
+  onReportGradient,
 }: GradientPanelProps) {
+  // State for report gradient modal
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [cpuValue, setCpuValue] = useState(50);
+  const [memoryValue, setMemoryValue] = useState(50);
+  const [bandwidthValue, setBandwidthValue] = useState(50);
+  const [storageValue, setStorageValue] = useState(50);
+
+  const handleReportSubmit = () => {
+    if (onReportGradient) {
+      onReportGradient(
+        cpuValue / 100,
+        memoryValue / 100,
+        bandwidthValue / 100,
+        storageValue / 100
+      );
+    }
+    setShowReportModal(false);
+  };
+
   // Calculate network-wide aggregate gradient
   const networkGradient = useMemo(() => {
     const values = Array.from(gradients.values());
@@ -96,6 +117,15 @@ export function GradientPanel({
                 Real-time resource availability across nodes
               </p>
             </div>
+            <div className="flex items-center gap-3">
+              {onReportGradient && (
+                <button
+                  onClick={() => setShowReportModal(true)}
+                  className="px-4 py-2 bg-glow-cyan/20 text-glow-cyan text-sm font-display rounded-lg hover:bg-glow-cyan/30 transition-colors"
+                >
+                  Report Gradient
+                </button>
+              )}
             {onClose && (
               <button
                 onClick={onClose}
@@ -106,6 +136,7 @@ export function GradientPanel({
                 </svg>
               </button>
             )}
+            </div>
           </div>
         </div>
 
@@ -369,6 +400,130 @@ export function GradientPanel({
           )}
         </div>
       </div>
+
+      {/* Report Gradient Modal */}
+      {showReportModal && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-void/90 backdrop-blur-sm">
+          <div className="w-full max-w-md bg-forest-floor border border-border-subtle rounded-xl shadow-card overflow-hidden">
+            {/* Modal Header */}
+            <div className="relative px-6 py-4 bg-deep-earth border-b border-border-subtle">
+              <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-glow-cyan via-spore-purple to-glow-gold" />
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-display font-bold text-mycelium-white">
+                  Report Resource Gradient
+                </h3>
+                <button
+                  onClick={() => setShowReportModal(false)}
+                  className="text-soft-gray hover:text-mycelium-white transition-colors"
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M18 6L6 18M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6 space-y-6">
+              {/* CPU Slider */}
+              <div>
+                <div className="flex justify-between items-center mb-2">
+                  <label className="text-sm font-display text-soft-gray uppercase tracking-wider">
+                    CPU Available
+                  </label>
+                  <span className={`text-sm font-display font-bold ${getGradientColor(cpuValue / 100)}`}>
+                    {cpuValue}%
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={cpuValue}
+                  onChange={(e) => setCpuValue(Number(e.target.value))}
+                  className="w-full h-2 bg-bark rounded-full appearance-none cursor-pointer accent-glow-cyan"
+                />
+              </div>
+
+              {/* Memory Slider */}
+              <div>
+                <div className="flex justify-between items-center mb-2">
+                  <label className="text-sm font-display text-soft-gray uppercase tracking-wider">
+                    Memory Available
+                  </label>
+                  <span className={`text-sm font-display font-bold ${getGradientColor(memoryValue / 100)}`}>
+                    {memoryValue}%
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={memoryValue}
+                  onChange={(e) => setMemoryValue(Number(e.target.value))}
+                  className="w-full h-2 bg-bark rounded-full appearance-none cursor-pointer accent-glow-cyan"
+                />
+              </div>
+
+              {/* Bandwidth Slider */}
+              <div>
+                <div className="flex justify-between items-center mb-2">
+                  <label className="text-sm font-display text-soft-gray uppercase tracking-wider">
+                    Bandwidth Available
+                  </label>
+                  <span className={`text-sm font-display font-bold ${getGradientColor(bandwidthValue / 100)}`}>
+                    {bandwidthValue}%
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={bandwidthValue}
+                  onChange={(e) => setBandwidthValue(Number(e.target.value))}
+                  className="w-full h-2 bg-bark rounded-full appearance-none cursor-pointer accent-glow-cyan"
+                />
+              </div>
+
+              {/* Storage Slider */}
+              <div>
+                <div className="flex justify-between items-center mb-2">
+                  <label className="text-sm font-display text-soft-gray uppercase tracking-wider">
+                    Storage Available
+                  </label>
+                  <span className={`text-sm font-display font-bold ${getGradientColor(storageValue / 100)}`}>
+                    {storageValue}%
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={storageValue}
+                  onChange={(e) => setStorageValue(Number(e.target.value))}
+                  className="w-full h-2 bg-bark rounded-full appearance-none cursor-pointer accent-glow-cyan"
+                />
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-3 pt-4">
+                <button
+                  onClick={() => setShowReportModal(false)}
+                  className="flex-1 px-4 py-2 bg-moss text-soft-gray font-display rounded-lg hover:bg-bark transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleReportSubmit}
+                  className="flex-1 px-4 py-2 bg-glow-cyan text-void font-display font-bold rounded-lg hover:bg-glow-cyan/80 transition-colors"
+                >
+                  Submit
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
