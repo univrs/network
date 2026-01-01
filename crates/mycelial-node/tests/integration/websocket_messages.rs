@@ -218,7 +218,9 @@ fn test_resource_contribution_format() {
 
     assert_eq!(msg["type"], "resource_contribution");
     let resource_type = msg["resource_type"].as_str().unwrap();
-    assert!(resource_type == "bandwidth" || resource_type == "storage" || resource_type == "compute");
+    assert!(
+        resource_type == "bandwidth" || resource_type == "storage" || resource_type == "compute"
+    );
 }
 
 // ============ Room Message Tests ============
@@ -238,7 +240,10 @@ fn test_room_joined_format() {
     });
 
     assert_eq!(msg["type"], "room_joined");
-    assert!(msg["topic"].as_str().unwrap().starts_with("/mycelial/1.0.0/room/"));
+    assert!(msg["topic"]
+        .as_str()
+        .unwrap()
+        .starts_with("/mycelial/1.0.0/room/"));
     assert!(msg["members"].is_array());
 }
 
@@ -308,7 +313,8 @@ fn test_parse_send_chat() {
 
 #[test]
 fn test_parse_send_chat_dm() {
-    let input = r#"{"type":"send_chat","content":"Private message","to":"12D3KooWBob","room_id":null}"#;
+    let input =
+        r#"{"type":"send_chat","content":"Private message","to":"12D3KooWBob","room_id":null}"#;
     let parsed: Value = serde_json::from_str(input).unwrap();
 
     assert_eq!(parsed["type"], "send_chat");
@@ -351,7 +357,8 @@ fn test_parse_subscribe() {
 
 #[test]
 fn test_parse_send_vouch() {
-    let input = r#"{"type":"send_vouch","vouchee":"12D3KooWBob","weight":0.8,"message":"Great work!"}"#;
+    let input =
+        r#"{"type":"send_vouch","vouchee":"12D3KooWBob","weight":0.8,"message":"Great work!"}"#;
     let parsed: Value = serde_json::from_str(input).unwrap();
 
     assert_eq!(parsed["type"], "send_vouch");
@@ -405,7 +412,8 @@ fn test_parse_cast_vote() {
 
 #[test]
 fn test_parse_report_resource() {
-    let input = r#"{"type":"report_resource","resource_type":"bandwidth","amount":100.0,"unit":"mbps"}"#;
+    let input =
+        r#"{"type":"report_resource","resource_type":"bandwidth","amount":100.0,"unit":"mbps"}"#;
     let parsed: Value = serde_json::from_str(input).unwrap();
 
     assert_eq!(parsed["type"], "report_resource");

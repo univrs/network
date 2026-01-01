@@ -332,8 +332,11 @@ impl DistributedElection {
         }
 
         // Start tracking this election
-        let election =
-            ActiveElection::new(announcement.election_id, announcement.initiator, announcement.region_id);
+        let election = ActiveElection::new(
+            announcement.election_id,
+            announcement.initiator,
+            announcement.region_id,
+        );
 
         {
             let mut active = self.active_election.write().await;
@@ -347,7 +350,8 @@ impl DistributedElection {
         );
 
         // Submit our candidacy if eligible
-        self.maybe_submit_candidacy(announcement.election_id).await?;
+        self.maybe_submit_candidacy(announcement.election_id)
+            .await?;
 
         Ok(())
     }
@@ -625,8 +629,9 @@ impl DistributedElection {
             let election = self.active_election.read().await;
             match &*election {
                 Some(e) => {
-                    should_vote =
-                        e.phase == ElectionPhase::Candidacy && e.candidacy_expired() && !e.candidates.is_empty();
+                    should_vote = e.phase == ElectionPhase::Candidacy
+                        && e.candidacy_expired()
+                        && !e.candidates.is_empty();
                     should_finalize = e.phase == ElectionPhase::Voting && e.voting_expired();
                 }
                 None => return Ok(()),
@@ -711,7 +716,10 @@ mod tests {
             })
             .await;
 
-        let id = election.trigger_election("region-1".to_string()).await.unwrap();
+        let id = election
+            .trigger_election("region-1".to_string())
+            .await
+            .unwrap();
         assert_eq!(id, 1);
 
         // Should have published announcement and candidacy
@@ -739,7 +747,10 @@ mod tests {
                 connection_count: 25,
             })
             .await;
-        election.trigger_election("region-1".to_string()).await.unwrap();
+        election
+            .trigger_election("region-1".to_string())
+            .await
+            .unwrap();
 
         // Handle candidacy from another node
         let candidacy = NexusCandidacy {
@@ -777,7 +788,10 @@ mod tests {
                 connection_count: 25,
             })
             .await;
-        election.trigger_election("region-1".to_string()).await.unwrap();
+        election
+            .trigger_election("region-1".to_string())
+            .await
+            .unwrap();
 
         // Add another candidate with higher score
         let candidacy = NexusCandidacy {
@@ -819,7 +833,10 @@ mod tests {
                 connection_count: 25,
             })
             .await;
-        election.trigger_election("region-1".to_string()).await.unwrap();
+        election
+            .trigger_election("region-1".to_string())
+            .await
+            .unwrap();
 
         // Add candidates and votes manually
         {
@@ -860,16 +877,19 @@ mod tests {
                 connection_count: 25,
             })
             .await;
-        election.trigger_election("region-1".to_string()).await.unwrap();
+        election
+            .trigger_election("region-1".to_string())
+            .await
+            .unwrap();
 
         // Try to add ineligible candidate
         let candidacy = NexusCandidacy {
             election_id: 1,
             candidate: NexusCandidate {
                 node: node2,
-                uptime: 0.5, // Too low
+                uptime: 0.5,          // Too low
                 bandwidth: 1_000_000, // Too low
-                reputation: 0.3, // Too low
+                reputation: 0.3,      // Too low
                 current_leaf_count: 5,
                 election_score: 0.2,
             },

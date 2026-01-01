@@ -4,11 +4,7 @@
 //! and provides a high-level API for network operations.
 
 use futures::StreamExt;
-use libp2p::{
-    gossipsub, identify, kad, mdns,
-    swarm::SwarmEvent,
-    Multiaddr, PeerId, Swarm,
-};
+use libp2p::{gossipsub, identify, kad, mdns, swarm::SwarmEvent, Multiaddr, PeerId, Swarm};
 use parking_lot::RwLock;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -43,9 +39,13 @@ pub enum NetworkCommand {
     /// Get a value from the DHT
     GetRecord { key: Vec<u8> },
     /// Get connected peers
-    GetPeers { response: tokio::sync::oneshot::Sender<Vec<PeerId>> },
+    GetPeers {
+        response: tokio::sync::oneshot::Sender<Vec<PeerId>>,
+    },
     /// Get network stats
-    GetStats { response: tokio::sync::oneshot::Sender<NetworkStats> },
+    GetStats {
+        response: tokio::sync::oneshot::Sender<NetworkStats>,
+    },
     /// Shutdown
     Shutdown,
 }
@@ -82,7 +82,9 @@ impl NetworkHandle {
     /// Subscribe to a gossipsub topic
     pub async fn subscribe(&self, topic: impl Into<String>) -> Result<()> {
         self.command_tx
-            .send(NetworkCommand::Subscribe { topic: topic.into() })
+            .send(NetworkCommand::Subscribe {
+                topic: topic.into(),
+            })
             .await
             .map_err(|_| NetworkError::Channel("Failed to send subscribe command".into()))
     }
@@ -90,7 +92,9 @@ impl NetworkHandle {
     /// Unsubscribe from a gossipsub topic
     pub async fn unsubscribe(&self, topic: impl Into<String>) -> Result<()> {
         self.command_tx
-            .send(NetworkCommand::Unsubscribe { topic: topic.into() })
+            .send(NetworkCommand::Unsubscribe {
+                topic: topic.into(),
+            })
             .await
             .map_err(|_| NetworkError::Channel("Failed to send unsubscribe command".into()))
     }
@@ -98,7 +102,10 @@ impl NetworkHandle {
     /// Publish a message to a gossipsub topic
     pub async fn publish(&self, topic: impl Into<String>, data: Vec<u8>) -> Result<()> {
         self.command_tx
-            .send(NetworkCommand::Publish { topic: topic.into(), data })
+            .send(NetworkCommand::Publish {
+                topic: topic.into(),
+                data,
+            })
             .await
             .map_err(|_| NetworkError::Channel("Failed to send publish command".into()))
     }
@@ -127,7 +134,8 @@ impl NetworkHandle {
             .await
             .map_err(|_| NetworkError::Channel("Failed to send get_peers command".into()))?;
 
-        rx.await.map_err(|_| NetworkError::Channel("Failed to receive peers".into()))
+        rx.await
+            .map_err(|_| NetworkError::Channel("Failed to receive peers".into()))
     }
 
     /// Get network statistics
@@ -138,7 +146,8 @@ impl NetworkHandle {
             .await
             .map_err(|_| NetworkError::Channel("Failed to send get_stats command".into()))?;
 
-        rx.await.map_err(|_| NetworkError::Channel("Failed to receive stats".into()))
+        rx.await
+            .map_err(|_| NetworkError::Channel("Failed to receive stats".into()))
     }
 
     /// Shutdown the network service
@@ -268,10 +277,12 @@ impl NetworkService {
 
         // Start listening on configured addresses
         for addr_str in &self.config.listen_addresses.clone() {
-            let addr: Multiaddr = addr_str.parse()
+            let addr: Multiaddr = addr_str
+                .parse()
                 .map_err(|e| NetworkError::InvalidMultiaddr(format!("{}: {}", addr_str, e)))?;
 
-            self.swarm.listen_on(addr.clone())
+            self.swarm
+                .listen_on(addr.clone())
                 .map_err(|e| NetworkError::ListenFailed {
                     address: addr_str.clone(),
                     reason: e.to_string(),
@@ -296,20 +307,23 @@ impl NetworkService {
             "/mycelial/1.0.0/governance", // Proposals and voting
             "/mycelial/1.0.0/resource",   // Resource sharing metrics
             // ENR bridge topics (gradient, credits, election, septal)
-            GRADIENT_TOPIC,               // Resource gradient broadcasts
-            CREDIT_TOPIC,                 // Credit transfers
-            ELECTION_TOPIC,               // Nexus election
-            SEPTAL_TOPIC,                 // Septal gate (circuit breaker)
+            GRADIENT_TOPIC, // Resource gradient broadcasts
+            CREDIT_TOPIC,   // Credit transfers
+            ELECTION_TOPIC, // Nexus election
+            SEPTAL_TOPIC,   // Septal gate (circuit breaker)
         ];
         for topic_str in topics {
             let topic = libp2p::gossipsub::IdentTopic::new(topic_str);
             match self.swarm.behaviour_mut().gossipsub.subscribe(&topic) {
                 Ok(true) => {
-                    info!("Subscribed to topic: {} (awaiting mesh formation)", topic_str);
+                    info!(
+                        "Subscribed to topic: {} (awaiting mesh formation)",
+                        topic_str
+                    );
                     self.subscribed_topics.insert(topic_str.to_string());
                     // Emit event so AppState gets updated
                     let _ = self.event_tx.send(NetworkEvent::Subscribed {
-                        topic: topic_str.to_string()
+                        topic: topic_str.to_string(),
                     });
                 }
                 Ok(false) => debug!("Already subscribed to: {}", topic_str),
@@ -389,7 +403,8 @@ impl NetworkService {
             } => {
                 debug!("Connection established with {}", peer_id);
 
-                self.peer_manager.set_state(peer_id, ConnectionState::Connected);
+                self.peer_manager
+                    .set_state(peer_id, ConnectionState::Connected);
 
                 let addr = endpoint.get_remote_address();
                 self.peer_manager.add_address(peer_id, addr.clone());
@@ -417,7 +432,8 @@ impl NetworkService {
                 debug!("Connection closed with {}: {:?}", peer_id, cause);
 
                 if num_established == 0 {
-                    self.peer_manager.set_state(peer_id, ConnectionState::Disconnected);
+                    self.peer_manager
+                        .set_state(peer_id, ConnectionState::Disconnected);
 
                     let _ = self.event_tx.send(NetworkEvent::PeerDisconnected {
                         peer_id,
@@ -445,7 +461,10 @@ impl NetworkService {
                     let current_state = self.peer_manager.get_state(&peer_id);
                     match current_state {
                         Some(ConnectionState::Connected) | Some(ConnectionState::Connecting) => {
-                            debug!("Ignoring dial error for peer {} (state: {:?})", peer_id, current_state);
+                            debug!(
+                                "Ignoring dial error for peer {} (state: {:?})",
+                                peer_id, current_state
+                            );
                         }
                         _ => {
                             // Check if we're actually connected to this peer via the swarm
@@ -453,7 +472,8 @@ impl NetworkService {
                                 debug!("Ignoring dial error for swarm-connected peer {}", peer_id);
                             } else {
                                 warn!("Dial error for {}: {:?}", peer_id, error);
-                                self.peer_manager.set_state(peer_id, ConnectionState::Failed);
+                                self.peer_manager
+                                    .set_state(peer_id, ConnectionState::Failed);
                             }
                         }
                     }
@@ -468,7 +488,8 @@ impl NetworkService {
             SwarmEvent::Dialing { peer_id, .. } => {
                 if let Some(peer_id) = peer_id {
                     debug!("Dialing {}", peer_id);
-                    self.peer_manager.set_state(peer_id, ConnectionState::Connecting);
+                    self.peer_manager
+                        .set_state(peer_id, ConnectionState::Connecting);
                     let _ = self.event_tx.send(NetworkEvent::Dialing { peer_id });
                 }
             }
@@ -529,7 +550,10 @@ impl NetworkService {
 
                 info!(
                     "Peer {} subscribed to '{}' | Mesh peers: {} | Total subscribed: {}",
-                    peer_id, topic_str, mesh_peers.len(), all_peers.len()
+                    peer_id,
+                    topic_str,
+                    mesh_peers.len(),
+                    all_peers.len()
                 );
 
                 if !mesh_peers.is_empty() {
@@ -542,13 +566,18 @@ impl NetworkService {
                 });
             }
 
-            MycelialBehaviourEvent::Gossipsub(gossipsub::Event::Unsubscribed { peer_id, topic }) => {
+            MycelialBehaviourEvent::Gossipsub(gossipsub::Event::Unsubscribed {
+                peer_id,
+                topic,
+            }) => {
                 let topic_str = topic.to_string();
                 let mesh_peers = self.swarm.behaviour().mesh_peers(&topic_str);
 
                 info!(
                     "Peer {} unsubscribed from '{}' | Remaining mesh peers: {}",
-                    peer_id, topic_str, mesh_peers.len()
+                    peer_id,
+                    topic_str,
+                    mesh_peers.len()
                 );
 
                 let _ = self.event_tx.send(NetworkEvent::PeerUnsubscribed {
@@ -557,7 +586,9 @@ impl NetworkService {
                 });
             }
 
-            MycelialBehaviourEvent::Identify(identify::Event::Received { peer_id, info, .. }) => {
+            MycelialBehaviourEvent::Identify(identify::Event::Received {
+                peer_id, info, ..
+            }) => {
                 debug!("Identified peer {}: {:?}", peer_id, info.agent_version);
 
                 self.peer_manager.set_identify_info(
@@ -571,7 +602,9 @@ impl NetworkService {
                 // This avoids adding unreachable Docker/WSL addresses in test environments
                 for addr in &info.listen_addrs {
                     if is_routable_address(addr) {
-                        self.swarm.behaviour_mut().add_address(&peer_id, addr.clone());
+                        self.swarm
+                            .behaviour_mut()
+                            .add_address(&peer_id, addr.clone());
                     } else {
                         debug!("Skipping non-routable address for {}: {}", peer_id, addr);
                     }
@@ -602,9 +635,9 @@ impl NetworkService {
                 ..
             }) => {
                 debug!("Stored DHT record: {:?}", key);
-                let _ = self.event_tx.send(NetworkEvent::RecordStored {
-                    key: key.to_vec(),
-                });
+                let _ = self
+                    .event_tx
+                    .send(NetworkEvent::RecordStored { key: key.to_vec() });
             }
 
             MycelialBehaviourEvent::Mdns(mdns::Event::Discovered(peers)) => {
@@ -614,18 +647,24 @@ impl NetworkService {
                     .into_iter()
                     .map(|(peer_id, addr)| {
                         self.peer_manager.add_address(peer_id, addr.clone());
-                        self.swarm.behaviour_mut().add_address(&peer_id, addr.clone());
+                        self.swarm
+                            .behaviour_mut()
+                            .add_address(&peer_id, addr.clone());
                         (peer_id, addr)
                     })
                     .collect();
 
-                let _ = self.event_tx.send(NetworkEvent::MdnsDiscovered { peers: discovered });
+                let _ = self
+                    .event_tx
+                    .send(NetworkEvent::MdnsDiscovered { peers: discovered });
             }
 
             MycelialBehaviourEvent::Mdns(mdns::Event::Expired(peers)) => {
                 debug!("mDNS expired {} peers", peers.len());
                 let expired: Vec<_> = peers.into_iter().map(|(peer_id, _)| peer_id).collect();
-                let _ = self.event_tx.send(NetworkEvent::MdnsExpired { peers: expired });
+                let _ = self
+                    .event_tx
+                    .send(NetworkEvent::MdnsExpired { peers: expired });
             }
 
             _ => {}
@@ -672,14 +711,18 @@ impl NetworkService {
 
                 info!(
                     "Publishing to '{}' | {} bytes | Mesh peers: {} | Total subscribers: {}",
-                    topic, data.len(), mesh_peers.len(), all_peers.len()
+                    topic,
+                    data.len(),
+                    mesh_peers.len(),
+                    all_peers.len()
                 );
 
                 if mesh_peers.is_empty() && !all_peers.is_empty() {
                     warn!(
                         "Warning: Publishing to '{}' with 0 mesh peers but {} subscribed peers. \
                         Mesh may not have formed yet (check mesh_n/mesh_n_low config).",
-                        topic, all_peers.len()
+                        topic,
+                        all_peers.len()
                     );
                 }
 
@@ -689,7 +732,12 @@ impl NetworkService {
 
                 match self.swarm.behaviour_mut().publish(&topic, data.clone()) {
                     Ok(msg_id) => {
-                        info!("Published message {} to '{}' via {} mesh peers", msg_id, topic, mesh_peers.len());
+                        info!(
+                            "Published message {} to '{}' via {} mesh peers",
+                            msg_id,
+                            topic,
+                            mesh_peers.len()
+                        );
                         let mut stats = self.stats.write();
                         stats.messages_sent += 1;
                         stats.bytes_sent += data.len() as u64;

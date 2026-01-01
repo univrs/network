@@ -61,21 +61,22 @@ pub mod transport;
 // Adding enr
 pub mod enr_bridge;
 
-
 // Re-exports
-pub use behaviour::{MycelialBehaviour, MycelialBehaviourEvent, topics};
+pub use behaviour::{topics, MycelialBehaviour, MycelialBehaviourEvent};
 pub use config::NetworkConfig;
-pub use economics::{EconomicsEvent, EconomicsHandler, economics_topics, is_economics_topic, parse_economics_message};
+pub use economics::{
+    economics_topics, is_economics_topic, parse_economics_message, EconomicsEvent, EconomicsHandler,
+};
 pub use error::{NetworkError, Result};
 pub use event::{NetworkEvent, NetworkStats};
 pub use peer::{ConnectionState, PeerInfo, PeerManager};
 pub use service::{NetworkCommand, NetworkHandle, NetworkService};
-pub use transport::{TransportConfig, create_transport, parse_multiaddr, extract_peer_id};
+pub use transport::{create_transport, extract_peer_id, parse_multiaddr, TransportConfig};
 
 // Re-export libp2p types commonly used
 pub use libp2p::identity::Keypair;
-pub use libp2p::PeerId as Libp2pPeerId;
 pub use libp2p::Multiaddr;
+pub use libp2p::PeerId as Libp2pPeerId;
 
 #[cfg(test)]
 mod tests {

@@ -3,11 +3,7 @@
 //! This module provides transport configuration for TCP, QUIC, and WebSocket
 //! with Noise encryption and Yamux multiplexing.
 
-use libp2p::{
-    core::upgrade,
-    identity::Keypair,
-    noise, yamux, PeerId, Transport,
-};
+use libp2p::{core::upgrade, identity::Keypair, noise, yamux, PeerId, Transport};
 use std::time::Duration;
 
 use crate::error::{NetworkError, Result};
@@ -44,8 +40,7 @@ pub fn create_tcp_transport(
     _keypair: &Keypair,
     _config: &TransportConfig,
 ) -> Result<libp2p::tcp::tokio::Transport> {
-    let tcp_config = libp2p::tcp::Config::default()
-        .nodelay(true);
+    let tcp_config = libp2p::tcp::Config::default().nodelay(true);
 
     Ok(libp2p::tcp::tokio::Transport::new(tcp_config))
 }
@@ -61,9 +56,7 @@ pub fn create_transport(
     config: &TransportConfig,
 ) -> Result<libp2p::core::transport::Boxed<(PeerId, libp2p::core::muxing::StreamMuxerBox)>> {
     // Create TCP transport
-    let tcp = libp2p::tcp::tokio::Transport::new(
-        libp2p::tcp::Config::default().nodelay(true)
-    );
+    let tcp = libp2p::tcp::tokio::Transport::new(libp2p::tcp::Config::default().nodelay(true));
 
     // Add Noise encryption
     let noise_config = noise::Config::new(keypair)
@@ -103,9 +96,8 @@ pub fn create_transport(
         Ok(dns_transport.boxed())
     } else {
         // TCP only with DNS
-        let transport = tcp_authenticated.map(|(peer_id, muxer), _| {
-            (peer_id, libp2p::core::muxing::StreamMuxerBox::new(muxer))
-        });
+        let transport = tcp_authenticated
+            .map(|(peer_id, muxer), _| (peer_id, libp2p::core::muxing::StreamMuxerBox::new(muxer)));
 
         let dns_transport = libp2p::dns::tokio::Transport::system(transport)
             .map_err(|e| NetworkError::Config(format!("DNS config error: {:?}", e)))?;

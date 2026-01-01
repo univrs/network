@@ -5,10 +5,7 @@
 
 use lru::LruCache;
 use mycelial_core::{
-    credit::CreditRelationship,
-    message::Message,
-    peer::PeerInfo,
-    reputation::Reputation,
+    credit::CreditRelationship, message::Message, peer::PeerInfo, reputation::Reputation,
 };
 use parking_lot::RwLock;
 use std::num::NonZeroUsize;
@@ -104,7 +101,8 @@ impl PeerCache {
 
     /// Insert or update peer
     pub fn insert(&self, peer_info: PeerInfo, reputation: Reputation) {
-        self.peers.insert(peer_info.id.as_str().to_string(), (peer_info, reputation));
+        self.peers
+            .insert(peer_info.id.as_str().to_string(), (peer_info, reputation));
     }
 
     /// Update reputation for existing peer
@@ -194,10 +192,7 @@ impl MessageCache {
 
         // Update sender index
         let mut by_sender = self.by_sender.write();
-        by_sender
-            .entry(sender)
-            .or_insert_with(Vec::new)
-            .push(id);
+        by_sender.entry(sender).or_insert_with(Vec::new).push(id);
     }
 
     /// Remove a message
@@ -288,7 +283,8 @@ impl CreditCache {
 
     /// Insert a relationship
     pub fn insert(&self, relationship: CreditRelationship) {
-        let id = Self::relationship_id(relationship.creditor.as_str(), relationship.debtor.as_str());
+        let id =
+            Self::relationship_id(relationship.creditor.as_str(), relationship.debtor.as_str());
         let creditor = relationship.creditor.as_str().to_string();
         let debtor = relationship.debtor.as_str().to_string();
 
@@ -296,7 +292,10 @@ impl CreditCache {
 
         // Update peer index
         let mut by_peer = self.by_peer.write();
-        by_peer.entry(creditor).or_insert_with(Vec::new).push(id.clone());
+        by_peer
+            .entry(creditor)
+            .or_insert_with(Vec::new)
+            .push(id.clone());
         by_peer.entry(debtor).or_insert_with(Vec::new).push(id);
     }
 

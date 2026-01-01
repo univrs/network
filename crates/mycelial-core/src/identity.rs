@@ -23,11 +23,7 @@ use std::fmt;
 use crate::{MycelialError, Result};
 
 // Re-export core identity types from univrs-identity
-pub use univrs_identity::{
-    Keypair,
-    PublicKey,
-    Signature,
-};
+pub use univrs_identity::{Keypair, PublicKey, Signature};
 
 /// Legacy signature bytes format for backward compatibility.
 ///
@@ -53,10 +49,12 @@ impl SignatureBytes {
 
     /// Decode from hex
     pub fn from_hex(s: &str) -> crate::Result<Self> {
-        let bytes = hex::decode(s)
-            .map_err(|e| crate::MycelialError::Serialization(e.to_string()))?;
+        let bytes =
+            hex::decode(s).map_err(|e| crate::MycelialError::Serialization(e.to_string()))?;
         if bytes.len() != 64 {
-            return Err(crate::MycelialError::Serialization("Invalid signature length".into()));
+            return Err(crate::MycelialError::Serialization(
+                "Invalid signature length".into(),
+            ));
         }
         let mut arr = [0u8; 64];
         arr.copy_from_slice(&bytes);
@@ -70,8 +68,7 @@ impl SignatureBytes {
 
     /// Convert to univrs-identity Signature
     pub fn to_signature(&self) -> Result<Signature> {
-        Signature::from_bytes(&self.0)
-            .map_err(|_| MycelialError::InvalidSignature)
+        Signature::from_bytes(&self.0).map_err(|_| MycelialError::InvalidSignature)
     }
 }
 
@@ -137,7 +134,7 @@ impl Did {
     pub fn parse(s: &str) -> Result<Self> {
         if !s.starts_with("did:key:") {
             return Err(MycelialError::Serialization(
-                "Invalid DID format: must start with 'did:key:'".into()
+                "Invalid DID format: must start with 'did:key:'".into(),
             ));
         }
         Ok(Self(s.to_string()))
@@ -150,18 +147,21 @@ impl Did {
 
     /// Extract the public key from the DID
     pub fn to_public_key(&self) -> Result<PublicKey> {
-        let multibase_part = self.0.strip_prefix("did:key:")
+        let multibase_part = self
+            .0
+            .strip_prefix("did:key:")
             .ok_or_else(|| MycelialError::Serialization("Invalid DID format".into()))?;
 
         let (_, bytes) = multibase::decode(multibase_part)
             .map_err(|e| MycelialError::Serialization(e.to_string()))?;
 
         if bytes.len() != 34 || bytes[0..2] != Self::ED25519_MULTICODEC {
-            return Err(MycelialError::Serialization("Invalid DID key format".into()));
+            return Err(MycelialError::Serialization(
+                "Invalid DID key format".into(),
+            ));
         }
 
-        PublicKey::from_bytes(&bytes[2..34])
-            .map_err(|_| MycelialError::InvalidSignature)
+        PublicKey::from_bytes(&bytes[2..34]).map_err(|_| MycelialError::InvalidSignature)
     }
 }
 
@@ -234,8 +234,8 @@ pub struct Signed<T> {
 impl<T: Serialize> Signed<T> {
     /// Create a new signed value
     pub fn new(data: T, keypair: &Keypair) -> Result<Self> {
-        let bytes = serde_cbor::to_vec(&data)
-            .map_err(|e| MycelialError::Serialization(e.to_string()))?;
+        let bytes =
+            serde_cbor::to_vec(&data).map_err(|e| MycelialError::Serialization(e.to_string()))?;
         let signature = keypair.sign_bytes(&bytes);
 
         Ok(Self {

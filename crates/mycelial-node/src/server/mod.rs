@@ -3,16 +3,13 @@
 //! This module provides the WebSocket and REST API server for the
 //! mycelial node dashboard.
 
-pub mod websocket;
-pub mod rest;
 pub mod messages;
+pub mod rest;
+pub mod websocket;
 
-use axum::{
-    routing::get,
-    Router,
-};
+use axum::{routing::get, Router};
 use std::sync::Arc;
-use tower_http::cors::{CorsLayer, Any};
+use tower_http::cors::{Any, CorsLayer};
 
 use crate::AppState;
 
@@ -34,7 +31,7 @@ pub fn create_router(state: Arc<AppState>) -> Router {
             CorsLayer::new()
                 .allow_origin(Any)
                 .allow_methods(Any)
-                .allow_headers(Any)
+                .allow_headers(Any),
         )
         .with_state(state)
 }

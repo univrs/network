@@ -5,7 +5,7 @@
 
 use serde::{Deserialize, Serialize};
 use univrs_enr::{
-    core::{Credits, CreditTransfer, NodeId, Timestamp},
+    core::{CreditTransfer, Credits, NodeId, Timestamp},
     nexus::{NexusCandidate, ResourceGradient},
     septal::SeptalGateState,
 };
@@ -264,7 +264,7 @@ mod tests {
     #[test]
     fn test_topic_routing() {
         let node = NodeId::from_bytes([1u8; 32]);
-        
+
         let gradient_msg = EnrMessage::GradientUpdate(GradientUpdate {
             source: node,
             gradient: ResourceGradient::zero(),

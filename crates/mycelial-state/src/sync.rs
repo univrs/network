@@ -6,9 +6,9 @@
 
 use chrono::{DateTime, Utc};
 use mycelial_core::{
+    credit::CreditRelationship,
     peer::{PeerId, PeerInfo},
     reputation::Reputation,
-    credit::CreditRelationship,
 };
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
@@ -202,8 +202,13 @@ impl StateSync {
     /// Apply an update received from the network
     pub async fn apply_update(&self, update: &StateUpdate, store: &SqliteStore) -> Result<bool> {
         match update {
-            StateUpdate::PeerUpdate { peer_id, info, timestamp } => {
-                self.apply_peer_update(peer_id, info, timestamp, store).await
+            StateUpdate::PeerUpdate {
+                peer_id,
+                info,
+                timestamp,
+            } => {
+                self.apply_peer_update(peer_id, info, timestamp, store)
+                    .await
             }
             StateUpdate::ReputationUpdate {
                 peer_id,
@@ -239,8 +244,14 @@ impl StateSync {
                 )
                 .await
             }
-            StateUpdate::KeyValueUpdate { key, value, version, timestamp } => {
-                self.apply_kv_update(key, value, *version, timestamp, store).await
+            StateUpdate::KeyValueUpdate {
+                key,
+                value,
+                version,
+                timestamp,
+            } => {
+                self.apply_kv_update(key, value, *version, timestamp, store)
+                    .await
             }
         }
     }
@@ -427,14 +438,12 @@ impl StateSync {
 
     /// Serialize an update for network transmission
     pub fn serialize_update(update: &StateUpdate) -> Result<Vec<u8>> {
-        serde_json::to_vec(update)
-            .map_err(|e| StateError::Serialization(e.to_string()))
+        serde_json::to_vec(update).map_err(|e| StateError::Serialization(e.to_string()))
     }
 
     /// Deserialize an update from network data
     pub fn deserialize_update(data: &[u8]) -> Result<StateUpdate> {
-        serde_json::from_slice(data)
-            .map_err(|e| StateError::Deserialization(e.to_string()))
+        serde_json::from_slice(data).map_err(|e| StateError::Deserialization(e.to_string()))
     }
 
     /// Get the current vector clock

@@ -137,7 +137,11 @@ pub struct ModuleMessage {
 
 impl ModuleMessage {
     /// Create a new module message
-    pub fn new(source: impl Into<String>, message_type: impl Into<String>, payload: Vec<u8>) -> Self {
+    pub fn new(
+        source: impl Into<String>,
+        message_type: impl Into<String>,
+        payload: Vec<u8>,
+    ) -> Self {
         Self {
             source_module: source.into(),
             target_module: None,
@@ -196,14 +200,12 @@ impl ModuleMessage {
 
     /// Serialize to bytes
     pub fn to_bytes(&self) -> Result<Vec<u8>> {
-        serde_cbor::to_vec(self)
-            .map_err(|e| MycelialError::Serialization(e.to_string()))
+        serde_cbor::to_vec(self).map_err(|e| MycelialError::Serialization(e.to_string()))
     }
 
     /// Deserialize from bytes
     pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
-        serde_cbor::from_slice(bytes)
-            .map_err(|e| MycelialError::Serialization(e.to_string()))
+        serde_cbor::from_slice(bytes).map_err(|e| MycelialError::Serialization(e.to_string()))
     }
 }
 

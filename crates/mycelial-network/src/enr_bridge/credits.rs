@@ -9,7 +9,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::{debug, info, warn};
 use univrs_enr::{
-    core::{AccountId, Credits, CreditTransfer, NodeId, Timestamp},
+    core::{AccountId, CreditTransfer, Credits, NodeId, Timestamp},
     revival::calculate_entropy_tax,
 };
 
@@ -108,7 +108,10 @@ impl CreditSynchronizer {
         }
 
         // Debit sender
-        ledger.insert(from_account.clone(), from_balance.saturating_sub(total_cost));
+        ledger.insert(
+            from_account.clone(),
+            from_balance.saturating_sub(total_cost),
+        );
 
         // Credit receiver
         let to_balance = ledger.get(&to_account).copied().unwrap_or(Credits::ZERO);
@@ -180,7 +183,10 @@ impl CreditSynchronizer {
         if transfer.to.node == self.local_node {
             let mut ledger = self.ledger.write().await;
             let to_balance = ledger.get(&transfer.to).copied().unwrap_or(Credits::ZERO);
-            ledger.insert(transfer.to.clone(), to_balance.saturating_add(transfer.amount));
+            ledger.insert(
+                transfer.to.clone(),
+                to_balance.saturating_add(transfer.amount),
+            );
 
             debug!(
                 from = %transfer.from.node,
@@ -196,12 +202,18 @@ impl CreditSynchronizer {
             // Debit sender
             let from_balance = ledger.get(&transfer.from).copied().unwrap_or(Credits::ZERO);
             if from_balance.amount >= total_cost.amount {
-                ledger.insert(transfer.from.clone(), from_balance.saturating_sub(total_cost));
+                ledger.insert(
+                    transfer.from.clone(),
+                    from_balance.saturating_sub(total_cost),
+                );
             }
 
             // Credit receiver
             let to_balance = ledger.get(&transfer.to).copied().unwrap_or(Credits::ZERO);
-            ledger.insert(transfer.to.clone(), to_balance.saturating_add(transfer.amount));
+            ledger.insert(
+                transfer.to.clone(),
+                to_balance.saturating_add(transfer.amount),
+            );
 
             debug!(
                 from = %transfer.from.node,
@@ -263,7 +275,9 @@ impl CreditSynchronizer {
     /// Get total credits in circulation (for invariant checking)
     pub async fn total_supply(&self) -> Credits {
         let ledger = self.ledger.read().await;
-        ledger.values().fold(Credits::ZERO, |acc, c| acc.saturating_add(*c))
+        ledger
+            .values()
+            .fold(Credits::ZERO, |acc, c| acc.saturating_add(*c))
     }
 }
 
@@ -274,7 +288,10 @@ pub enum TransferError {
     #[error("Cannot transfer to self")]
     SelfTransfer,
     #[error("Insufficient credits: have {available}, need {required}")]
-    InsufficientCredits { available: Credits, required: Credits },
+    InsufficientCredits {
+        available: Credits,
+        required: Credits,
+    },
     #[error("Encoding error: {0}")]
     Encode(#[from] crate::enr_bridge::messages::EncodeError),
     #[error("Publish error: {0}")]
@@ -302,7 +319,10 @@ mod tests {
     use super::*;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
-    fn mock_publish() -> (impl Fn(String, Vec<u8>) -> Result<(), String> + Clone, Arc<AtomicUsize>) {
+    fn mock_publish() -> (
+        impl Fn(String, Vec<u8>) -> Result<(), String> + Clone,
+        Arc<AtomicUsize>,
+    ) {
         let counter = Arc::new(AtomicUsize::new(0));
         let c = counter.clone();
         let f = move |_topic: String, _bytes: Vec<u8>| {
@@ -353,7 +373,10 @@ mod tests {
 
         // Try to transfer more than we have
         let result = sync.transfer(node2, Credits::new(2000)).await;
-        assert!(matches!(result, Err(TransferError::InsufficientCredits { .. })));
+        assert!(matches!(
+            result,
+            Err(TransferError::InsufficientCredits { .. })
+        ));
 
         // Balance unchanged
         let balance = sync.local_balance().await;

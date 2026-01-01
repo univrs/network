@@ -155,7 +155,10 @@ impl EnrBridge {
     }
 
     /// Broadcast local resource gradient to the network
-    pub async fn broadcast_gradient(&self, gradient: ResourceGradient) -> Result<(), BroadcastError> {
+    pub async fn broadcast_gradient(
+        &self,
+        gradient: ResourceGradient,
+    ) -> Result<(), BroadcastError> {
         self.gradient.broadcast_update(gradient).await
     }
 
@@ -281,7 +284,10 @@ mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Arc;
 
-    fn mock_publish() -> (impl Fn(String, Vec<u8>) -> Result<(), String> + Clone, Arc<AtomicUsize>) {
+    fn mock_publish() -> (
+        impl Fn(String, Vec<u8>) -> Result<(), String> + Clone,
+        Arc<AtomicUsize>,
+    ) {
         let counter = Arc::new(AtomicUsize::new(0));
         let c = counter.clone();
         let f = move |_topic: String, _bytes: Vec<u8>| {
@@ -343,7 +349,10 @@ mod tests {
         let bridge2 = EnrBridge::new(node2, publish);
 
         // Transfer from node1 to node2
-        bridge1.transfer_credits(node2, Credits::new(100)).await.unwrap();
+        bridge1
+            .transfer_credits(node2, Credits::new(100))
+            .await
+            .unwrap();
         assert_eq!(counter.load(Ordering::SeqCst), 1);
 
         // Node1 balance: 1000 - 100 - 2 (tax) = 898

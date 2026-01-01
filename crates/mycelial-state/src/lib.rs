@@ -30,13 +30,13 @@
 //! }
 //! ```
 
+pub mod cache;
 pub mod error;
 pub mod storage;
-pub mod cache;
 pub mod sync;
 
 // Re-exports for convenience
+pub use cache::{CacheStats, CreditCache, MemoryCache, MessageCache, PeerCache, StateCache};
 pub use error::{Result, StateError};
 pub use storage::SqliteStore;
-pub use cache::{StateCache, PeerCache, MessageCache, CreditCache, MemoryCache, CacheStats};
-pub use sync::{StateSync, StateUpdate, VectorClock, PeerInfoUpdate};
+pub use sync::{PeerInfoUpdate, StateSync, StateUpdate, VectorClock};

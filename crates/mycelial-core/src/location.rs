@@ -35,8 +35,7 @@ impl Location {
         let dlat = (other.latitude - self.latitude).to_radians();
         let dlon = (other.longitude - self.longitude).to_radians();
 
-        let a = (dlat / 2.0).sin().powi(2)
-            + lat1.cos() * lat2.cos() * (dlon / 2.0).sin().powi(2);
+        let a = (dlat / 2.0).sin().powi(2) + lat1.cos() * lat2.cos() * (dlon / 2.0).sin().powi(2);
         let c = 2.0 * a.sqrt().asin();
 
         EARTH_RADIUS * c

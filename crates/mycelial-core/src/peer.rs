@@ -34,8 +34,7 @@ impl PeerId {
 
     /// Try to convert back to a public key
     pub fn to_public_key(&self) -> crate::Result<PublicKey> {
-        PublicKey::from_base58(&self.0)
-            .map_err(|_| crate::MycelialError::InvalidSignature)
+        PublicKey::from_base58(&self.0).map_err(|_| crate::MycelialError::InvalidSignature)
     }
 }
 
@@ -115,8 +114,7 @@ impl PeerInfo {
 
     /// Get the public key for verification
     pub fn get_public_key(&self) -> crate::Result<PublicKey> {
-        PublicKey::from_base58(&self.public_key)
-            .map_err(|_| crate::MycelialError::InvalidSignature)
+        PublicKey::from_base58(&self.public_key).map_err(|_| crate::MycelialError::InvalidSignature)
     }
 
     /// Update the last_seen timestamp

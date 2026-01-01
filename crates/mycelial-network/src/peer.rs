@@ -143,7 +143,8 @@ impl PeerManager {
     /// Get or create peer info
     pub fn get_or_create(&self, peer_id: PeerId) -> PeerInfo {
         let mut peers = self.peers.write();
-        peers.entry(peer_id)
+        peers
+            .entry(peer_id)
             .or_insert_with(|| PeerInfo::new(peer_id))
             .clone()
     }
