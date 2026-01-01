@@ -44,7 +44,65 @@ jobs:
       # Create stub Cargo.toml for private repos that couldn't be checked out
       - name: Create stub manifests for missing dependencies
         run: |
-          for repo in univrs-identity univrs-state univrs-enr; do
+          # Create univrs-identity stub with required type exports
+          if [ ! -f "univrs-identity/Cargo.toml" ]; then
+            mkdir -p "univrs-identity/src"
+            # Create Cargo.toml
+            echo '[package]' > "univrs-identity/Cargo.toml"
+            echo 'name = "univrs-identity"' >> "univrs-identity/Cargo.toml"
+            echo 'version = "0.1.0"' >> "univrs-identity/Cargo.toml"
+            echo 'edition = "2021"' >> "univrs-identity/Cargo.toml"
+            echo '' >> "univrs-identity/Cargo.toml"
+            echo '[dependencies]' >> "univrs-identity/Cargo.toml"
+            echo 'ed25519-dalek = { version = "2", features = ["rand_core"] }' >> "univrs-identity/Cargo.toml"
+            echo 'rand = "0.8"' >> "univrs-identity/Cargo.toml"
+            echo 'serde = { version = "1", features = ["derive"] }' >> "univrs-identity/Cargo.toml"
+            # Create lib.rs with stub types
+            cat > "univrs-identity/src/lib.rs" <<'EOF'
+          use ed25519_dalek::{SigningKey, VerifyingKey, Signer, Verifier};
+          use rand::rngs::OsRng;
+          use serde::{Deserialize, Serialize};
+
+          #[derive(Clone)]
+          pub struct Keypair(SigningKey);
+          impl Keypair {
+              pub fn generate() -> Self { Self(SigningKey::generate(&mut OsRng)) }
+              pub fn public(&self) -> PublicKey { PublicKey(self.0.verifying_key()) }
+              pub fn sign(&self, msg: &[u8]) -> Signature { Signature(self.0.sign(msg)) }
+          }
+
+          #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+          pub struct PublicKey(#[serde(with = "pk_serde")] VerifyingKey);
+          impl PublicKey {
+              pub fn as_bytes(&self) -> &[u8; 32] { self.0.as_bytes() }
+              pub fn verify(&self, msg: &[u8], sig: &Signature) -> Result<(), String> {
+                  self.0.verify(msg, &sig.0).map_err(|e| e.to_string())
+              }
+          }
+          mod pk_serde {
+              use super::*;
+              pub fn serialize<S: serde::Serializer>(key: &VerifyingKey, s: S) -> Result<S::Ok, S::Error> {
+                  s.serialize_bytes(key.as_bytes())
+              }
+              pub fn deserialize<'de, D: serde::Deserializer<'de>>(d: D) -> Result<VerifyingKey, D::Error> {
+                  let bytes: Vec<u8> = Deserialize::deserialize(d)?;
+                  VerifyingKey::from_bytes(bytes.as_slice().try_into().map_err(serde::de::Error::custom)?)
+                      .map_err(serde::de::Error::custom)
+              }
+          }
+
+          #[derive(Clone, Debug)]
+          pub struct Signature(ed25519_dalek::Signature);
+          impl Signature {
+              pub fn to_bytes(&self) -> [u8; 64] { self.0.to_bytes() }
+          }
+          EOF
+            # Strip leading whitespace from lib.rs
+            sed -i 's/^          //' "univrs-identity/src/lib.rs"
+          fi
+
+          # Create other stubs as simple empty crates
+          for repo in univrs-state univrs-enr; do
             if [ ! -f "$repo/Cargo.toml" ]; then
               mkdir -p "$repo/src"
               echo '[package]' > "$repo/Cargo.toml"
@@ -112,7 +170,65 @@ jobs:
       # Create stub Cargo.toml for private repos that couldn't be checked out
       - name: Create stub manifests for missing dependencies
         run: |
-          for repo in univrs-identity univrs-state univrs-enr; do
+          # Create univrs-identity stub with required type exports
+          if [ ! -f "univrs-identity/Cargo.toml" ]; then
+            mkdir -p "univrs-identity/src"
+            # Create Cargo.toml
+            echo '[package]' > "univrs-identity/Cargo.toml"
+            echo 'name = "univrs-identity"' >> "univrs-identity/Cargo.toml"
+            echo 'version = "0.1.0"' >> "univrs-identity/Cargo.toml"
+            echo 'edition = "2021"' >> "univrs-identity/Cargo.toml"
+            echo '' >> "univrs-identity/Cargo.toml"
+            echo '[dependencies]' >> "univrs-identity/Cargo.toml"
+            echo 'ed25519-dalek = { version = "2", features = ["rand_core"] }' >> "univrs-identity/Cargo.toml"
+            echo 'rand = "0.8"' >> "univrs-identity/Cargo.toml"
+            echo 'serde = { version = "1", features = ["derive"] }' >> "univrs-identity/Cargo.toml"
+            # Create lib.rs with stub types
+            cat > "univrs-identity/src/lib.rs" <<'EOF'
+          use ed25519_dalek::{SigningKey, VerifyingKey, Signer, Verifier};
+          use rand::rngs::OsRng;
+          use serde::{Deserialize, Serialize};
+
+          #[derive(Clone)]
+          pub struct Keypair(SigningKey);
+          impl Keypair {
+              pub fn generate() -> Self { Self(SigningKey::generate(&mut OsRng)) }
+              pub fn public(&self) -> PublicKey { PublicKey(self.0.verifying_key()) }
+              pub fn sign(&self, msg: &[u8]) -> Signature { Signature(self.0.sign(msg)) }
+          }
+
+          #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+          pub struct PublicKey(#[serde(with = "pk_serde")] VerifyingKey);
+          impl PublicKey {
+              pub fn as_bytes(&self) -> &[u8; 32] { self.0.as_bytes() }
+              pub fn verify(&self, msg: &[u8], sig: &Signature) -> Result<(), String> {
+                  self.0.verify(msg, &sig.0).map_err(|e| e.to_string())
+              }
+          }
+          mod pk_serde {
+              use super::*;
+              pub fn serialize<S: serde::Serializer>(key: &VerifyingKey, s: S) -> Result<S::Ok, S::Error> {
+                  s.serialize_bytes(key.as_bytes())
+              }
+              pub fn deserialize<'de, D: serde::Deserializer<'de>>(d: D) -> Result<VerifyingKey, D::Error> {
+                  let bytes: Vec<u8> = Deserialize::deserialize(d)?;
+                  VerifyingKey::from_bytes(bytes.as_slice().try_into().map_err(serde::de::Error::custom)?)
+                      .map_err(serde::de::Error::custom)
+              }
+          }
+
+          #[derive(Clone, Debug)]
+          pub struct Signature(ed25519_dalek::Signature);
+          impl Signature {
+              pub fn to_bytes(&self) -> [u8; 64] { self.0.to_bytes() }
+          }
+          EOF
+            # Strip leading whitespace from lib.rs
+            sed -i 's/^          //' "univrs-identity/src/lib.rs"
+          fi
+
+          # Create other stubs as simple empty crates
+          for repo in univrs-state univrs-enr; do
             if [ ! -f "$repo/Cargo.toml" ]; then
               mkdir -p "$repo/src"
               echo '[package]' > "$repo/Cargo.toml"
@@ -178,7 +294,65 @@ jobs:
       # Create stub Cargo.toml for private repos that couldn't be checked out
       - name: Create stub manifests for missing dependencies
         run: |
-          for repo in univrs-identity univrs-state univrs-enr; do
+          # Create univrs-identity stub with required type exports
+          if [ ! -f "univrs-identity/Cargo.toml" ]; then
+            mkdir -p "univrs-identity/src"
+            # Create Cargo.toml
+            echo '[package]' > "univrs-identity/Cargo.toml"
+            echo 'name = "univrs-identity"' >> "univrs-identity/Cargo.toml"
+            echo 'version = "0.1.0"' >> "univrs-identity/Cargo.toml"
+            echo 'edition = "2021"' >> "univrs-identity/Cargo.toml"
+            echo '' >> "univrs-identity/Cargo.toml"
+            echo '[dependencies]' >> "univrs-identity/Cargo.toml"
+            echo 'ed25519-dalek = { version = "2", features = ["rand_core"] }' >> "univrs-identity/Cargo.toml"
+            echo 'rand = "0.8"' >> "univrs-identity/Cargo.toml"
+            echo 'serde = { version = "1", features = ["derive"] }' >> "univrs-identity/Cargo.toml"
+            # Create lib.rs with stub types
+            cat > "univrs-identity/src/lib.rs" <<'EOF'
+          use ed25519_dalek::{SigningKey, VerifyingKey, Signer, Verifier};
+          use rand::rngs::OsRng;
+          use serde::{Deserialize, Serialize};
+
+          #[derive(Clone)]
+          pub struct Keypair(SigningKey);
+          impl Keypair {
+              pub fn generate() -> Self { Self(SigningKey::generate(&mut OsRng)) }
+              pub fn public(&self) -> PublicKey { PublicKey(self.0.verifying_key()) }
+              pub fn sign(&self, msg: &[u8]) -> Signature { Signature(self.0.sign(msg)) }
+          }
+
+          #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+          pub struct PublicKey(#[serde(with = "pk_serde")] VerifyingKey);
+          impl PublicKey {
+              pub fn as_bytes(&self) -> &[u8; 32] { self.0.as_bytes() }
+              pub fn verify(&self, msg: &[u8], sig: &Signature) -> Result<(), String> {
+                  self.0.verify(msg, &sig.0).map_err(|e| e.to_string())
+              }
+          }
+          mod pk_serde {
+              use super::*;
+              pub fn serialize<S: serde::Serializer>(key: &VerifyingKey, s: S) -> Result<S::Ok, S::Error> {
+                  s.serialize_bytes(key.as_bytes())
+              }
+              pub fn deserialize<'de, D: serde::Deserializer<'de>>(d: D) -> Result<VerifyingKey, D::Error> {
+                  let bytes: Vec<u8> = Deserialize::deserialize(d)?;
+                  VerifyingKey::from_bytes(bytes.as_slice().try_into().map_err(serde::de::Error::custom)?)
+                      .map_err(serde::de::Error::custom)
+              }
+          }
+
+          #[derive(Clone, Debug)]
+          pub struct Signature(ed25519_dalek::Signature);
+          impl Signature {
+              pub fn to_bytes(&self) -> [u8; 64] { self.0.to_bytes() }
+          }
+          EOF
+            # Strip leading whitespace from lib.rs
+            sed -i 's/^          //' "univrs-identity/src/lib.rs"
+          fi
+
+          # Create other stubs as simple empty crates
+          for repo in univrs-state univrs-enr; do
             if [ ! -f "$repo/Cargo.toml" ]; then
               mkdir -p "$repo/src"
               echo '[package]' > "$repo/Cargo.toml"
