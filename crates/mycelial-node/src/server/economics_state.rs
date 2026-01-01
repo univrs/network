@@ -663,10 +663,7 @@ mod tests {
     fn test_low_reputation_peers() {
         let manager = EconomicsStateManager::new();
 
-        manager
-            .reputations
-            .write()
-            .insert("alice".to_string(), 0.8);
+        manager.reputations.write().insert("alice".to_string(), 0.8);
         manager.reputations.write().insert("bob".to_string(), 0.2);
         manager
             .reputations
