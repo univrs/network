@@ -11,6 +11,7 @@ Cargo.lock
 # Claude Flow / AI tooling generated files
 .claude/
 .claude-flow/
+.flows/
 .swarm/
 .hive-mind/
 memory/
