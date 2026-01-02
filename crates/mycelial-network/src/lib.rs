@@ -64,7 +64,6 @@ pub mod transport;
 pub mod enr_bridge;
 
 // Partition testing module (for network partition simulation in tests)
-#[cfg(any(test, feature = "partition-testing"))]
 pub mod partition;
 
 // OpenRaft consensus layer (Phase 1)
@@ -84,7 +83,6 @@ pub use service::{NetworkCommand, NetworkHandle, NetworkService};
 pub use transport::{create_transport, extract_peer_id, parse_multiaddr, TransportConfig};
 
 // Partition testing re-exports
-#[cfg(any(test, feature = "partition-testing"))]
 pub use partition::{PartitionId, PartitionSimulator, PartitionStats};
 
 // Test utilities - available with test-utils feature or in tests

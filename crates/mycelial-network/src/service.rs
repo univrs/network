@@ -49,13 +49,10 @@ pub enum NetworkCommand {
         response: tokio::sync::oneshot::Sender<NetworkStats>,
     },
     /// Block a peer (partition testing)
-    #[cfg(any(test, feature = "partition-testing"))]
     BlockPeer { peer_id: PeerId },
     /// Unblock a specific peer (partition testing)
-    #[cfg(any(test, feature = "partition-testing"))]
     UnblockPeer { peer_id: PeerId },
     /// Unblock all peers (partition testing)
-    #[cfg(any(test, feature = "partition-testing"))]
     UnblockAllPeers,
     /// Shutdown
     Shutdown,
@@ -170,7 +167,6 @@ impl NetworkHandle {
     }
 
     /// Block a peer - prevents receiving messages from this peer (partition testing)
-    #[cfg(any(test, feature = "partition-testing"))]
     pub async fn block_peer(&self, peer_id: PeerId) -> Result<()> {
         self.command_tx
             .send(NetworkCommand::BlockPeer { peer_id })
@@ -179,7 +175,6 @@ impl NetworkHandle {
     }
 
     /// Unblock a specific peer (partition testing)
-    #[cfg(any(test, feature = "partition-testing"))]
     pub async fn unblock_peer(&self, peer_id: PeerId) -> Result<()> {
         self.command_tx
             .send(NetworkCommand::UnblockPeer { peer_id })
@@ -188,7 +183,6 @@ impl NetworkHandle {
     }
 
     /// Unblock all peers - restores normal message flow (partition testing)
-    #[cfg(any(test, feature = "partition-testing"))]
     pub async fn unblock_all_peers(&self) -> Result<()> {
         self.command_tx
             .send(NetworkCommand::UnblockAllPeers)
@@ -224,7 +218,6 @@ pub struct NetworkService {
     #[cfg(feature = "univrs-compat")]
     enr_bridge: Arc<EnrBridge>,
     /// Blocked peers for partition testing
-    #[cfg(any(test, feature = "partition-testing"))]
     blocked_peers: HashSet<PeerId>,
 }
 
@@ -335,7 +328,6 @@ impl NetworkService {
             running: false,
             #[cfg(feature = "univrs-compat")]
             enr_bridge,
-            #[cfg(any(test, feature = "partition-testing"))]
             blocked_peers: HashSet::new(),
         };
 
@@ -396,7 +388,6 @@ impl NetworkService {
             stats: Arc::new(RwLock::new(NetworkStats::default())),
             start_time: Instant::now(),
             running: false,
-            #[cfg(any(test, feature = "partition-testing"))]
             blocked_peers: HashSet::new(),
         };
 
@@ -559,7 +550,6 @@ impl NetworkService {
                 ..
             } => {
                 // Filter connections from blocked peers (partition testing)
-                #[cfg(any(test, feature = "partition-testing"))]
                 if self.blocked_peers.contains(&peer_id) {
                     debug!("Disconnecting blocked peer {} (partition testing)", peer_id);
                     let _ = self.swarm.disconnect_peer_id(peer_id);
@@ -674,7 +664,6 @@ impl NetworkService {
                 message,
             }) => {
                 // Filter messages from blocked peers (partition testing)
-                #[cfg(any(test, feature = "partition-testing"))]
                 if let Some(source) = &message.source {
                     if self.blocked_peers.contains(source) {
                         debug!(
@@ -952,7 +941,6 @@ impl NetworkService {
             }
 
             // Partition testing commands
-            #[cfg(any(test, feature = "partition-testing"))]
             NetworkCommand::BlockPeer { peer_id } => {
                 self.blocked_peers.insert(peer_id);
                 info!("Blocked peer {} for partition testing", peer_id);
@@ -960,13 +948,11 @@ impl NetworkService {
                 let _ = self.swarm.disconnect_peer_id(peer_id);
             }
 
-            #[cfg(any(test, feature = "partition-testing"))]
             NetworkCommand::UnblockPeer { peer_id } => {
                 self.blocked_peers.remove(&peer_id);
                 info!("Unblocked peer {} for partition testing", peer_id);
             }
 
-            #[cfg(any(test, feature = "partition-testing"))]
             NetworkCommand::UnblockAllPeers => {
                 let count = self.blocked_peers.len();
                 self.blocked_peers.clear();
