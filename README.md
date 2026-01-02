@@ -1,4 +1,7 @@
-# Mycelial P2P Network
+# Mycelial P2P Network 
+
+> [!CAUTION]
+> This project is a research demonstrator. It is in early development and may change significantly. Using permissive Univrs tools in your repository requires careful attention to security considerations and careful human supervision, and even then things can still go wrong. Use it with caution, and at your own risk. See [Disclaimer](#disclaimer).
 
 A peer-to-peer agent network implementing **Mycelial Economics** principles for [Univrs.io](https://univrs.io). Built with Rust, libp2p, and React.
 
@@ -212,6 +215,15 @@ We welcome contributions! Please:
 3. Ensure tests pass (`cargo test --workspace`)
 4. Submit a pull request
 
+## Disclaimer
+
+> [!IMPORTANT] > **This is an experimental system. _We break things frequently_.**
+
+- Not accepting contributions yet (but we plan to!)
+- No stability guarantees
+- Pin commits if you need consistency
+- This is a learning resource, not production software
+- **No support provided** - See [SUPPORT.md](SUPPORT.md)
 ---
 
 *Built by [Univrs.io](https://univrs.io)*
