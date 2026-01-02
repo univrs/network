@@ -227,6 +227,24 @@ impl EnrBridge {
         self.election.election_in_progress().await
     }
 
+    /// Submit candidacy for an election with specific metrics
+    pub async fn submit_candidacy(
+        &self,
+        election_id: u64,
+        metrics: LocalNodeMetrics,
+    ) -> Result<(), ElectionError> {
+        self.election.submit_candidacy(election_id, metrics).await
+    }
+
+    /// Vote for a specific candidate in an election
+    pub async fn vote_for_candidate(
+        &self,
+        election_id: u64,
+        candidate: univrs_enr::core::NodeId,
+    ) -> Result<(), ElectionError> {
+        self.election.vote_for_candidate(election_id, candidate).await
+    }
+
     // ─────────────────────────────────────────────────────────────────────────────
     // Septal Gate (Circuit Breaker) Methods
     // ─────────────────────────────────────────────────────────────────────────────

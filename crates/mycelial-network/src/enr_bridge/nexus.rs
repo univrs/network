@@ -270,6 +270,25 @@ impl DistributedElection {
         Ok(election_id)
     }
 
+    /// Submit candidacy with specific metrics
+    ///
+    /// Called explicitly when a node wants to register as a candidate
+    /// with the provided metrics. Use this for WebSocket-driven candidacy.
+    pub async fn submit_candidacy(
+        &self,
+        election_id: u64,
+        metrics: LocalNodeMetrics,
+    ) -> Result<(), ElectionError> {
+        // Update local metrics first
+        {
+            let mut m = self.local_metrics.write().await;
+            *m = metrics;
+        }
+
+        // Then submit candidacy using the updated metrics
+        self.maybe_submit_candidacy(election_id).await
+    }
+
     /// Submit candidacy if eligible
     async fn maybe_submit_candidacy(&self, election_id: u64) -> Result<(), ElectionError> {
         let metrics = self.local_metrics.read().await.clone();
@@ -395,7 +414,7 @@ impl DistributedElection {
         Ok(())
     }
 
-    /// Cast vote for a candidate
+    /// Cast vote for the best candidate (auto-selected by score)
     pub async fn cast_vote(&self, election_id: u64) -> Result<(), ElectionError> {
         let best_candidate = {
             let election = self.active_election.read().await;
@@ -445,6 +464,58 @@ impl DistributedElection {
             voter = %self.local_node,
             candidate = %candidate,
             "Cast vote"
+        );
+
+        Ok(())
+    }
+
+    /// Cast vote for a specific candidate
+    pub async fn vote_for_candidate(
+        &self,
+        election_id: u64,
+        candidate: NodeId,
+    ) -> Result<(), ElectionError> {
+        // Verify candidate exists
+        {
+            let election = self.active_election.read().await;
+            match &*election {
+                Some(e) if e.election_id == election_id => {
+                    if !e.candidates.contains_key(&candidate) {
+                        return Err(ElectionError::NoCandidates);
+                    }
+                }
+                _ => return Err(ElectionError::NoCandidates),
+            }
+        }
+
+        // Record our vote locally
+        {
+            let mut election = self.active_election.write().await;
+            if let Some(ref mut e) = *election {
+                if e.election_id == election_id {
+                    e.votes.insert(self.local_node, candidate);
+                    e.phase = ElectionPhase::Voting;
+                }
+            }
+        }
+
+        // Broadcast vote
+        let vote = ElectionVote {
+            election_id,
+            voter: self.local_node,
+            candidate,
+            timestamp: Timestamp::now(),
+        };
+
+        let msg = EnrMessage::Election(ElectionMessage::Vote(vote));
+        let bytes = msg.encode().map_err(ElectionError::Encode)?;
+        (self.publish_fn)(ELECTION_TOPIC.to_string(), bytes).map_err(ElectionError::Publish)?;
+
+        debug!(
+            election_id = election_id,
+            voter = %self.local_node,
+            candidate = %candidate,
+            "Cast vote for specific candidate"
         );
 
         Ok(())

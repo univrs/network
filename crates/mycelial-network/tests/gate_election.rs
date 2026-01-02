@@ -24,7 +24,7 @@ use mycelial_network::enr_bridge::LocalNodeMetrics;
 ///
 /// Run with: cargo test --test gate_election -- --ignored
 #[tokio::test]
-#[ignore = "Integration test - requires clean network environment"]
+// Note: Run with --test-threads=1 to avoid port conflicts
 async fn test_election_announcement_propagates() {
     let _ = tracing_subscriber::fmt()
         .with_env_filter("mycelial_network=debug,gate_election=debug")
@@ -115,7 +115,7 @@ async fn test_election_announcement_propagates() {
 ///
 /// For MVP, we test that the process completes without error.
 #[tokio::test]
-#[ignore = "Integration test - requires clean network environment"]
+// Note: Run with --test-threads=1 to avoid port conflicts
 async fn test_election_completes_with_winner() {
     let _ = tracing_subscriber::fmt()
         .with_env_filter("mycelial_network=info")
@@ -212,7 +212,7 @@ async fn test_election_completes_with_winner() {
 
 /// Test that ineligible nodes cannot win election
 #[tokio::test]
-#[ignore = "Integration test - requires clean network environment"]
+// Note: Run with --test-threads=1 to avoid port conflicts
 async fn test_ineligible_node_cannot_win() {
     let _ = tracing_subscriber::fmt()
         .with_env_filter("mycelial_network=info")

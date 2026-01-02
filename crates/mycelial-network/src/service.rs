@@ -48,6 +48,15 @@ pub enum NetworkCommand {
     GetStats {
         response: tokio::sync::oneshot::Sender<NetworkStats>,
     },
+    /// Block a peer (partition testing)
+    #[cfg(any(test, feature = "partition-testing"))]
+    BlockPeer { peer_id: PeerId },
+    /// Unblock a specific peer (partition testing)
+    #[cfg(any(test, feature = "partition-testing"))]
+    UnblockPeer { peer_id: PeerId },
+    /// Unblock all peers (partition testing)
+    #[cfg(any(test, feature = "partition-testing"))]
+    UnblockAllPeers,
     /// Shutdown
     Shutdown,
 }
@@ -159,6 +168,33 @@ impl NetworkHandle {
             .await
             .map_err(|_| NetworkError::Channel("Failed to send shutdown command".into()))
     }
+
+    /// Block a peer - prevents receiving messages from this peer (partition testing)
+    #[cfg(any(test, feature = "partition-testing"))]
+    pub async fn block_peer(&self, peer_id: PeerId) -> Result<()> {
+        self.command_tx
+            .send(NetworkCommand::BlockPeer { peer_id })
+            .await
+            .map_err(|_| NetworkError::Channel("Failed to send block_peer command".into()))
+    }
+
+    /// Unblock a specific peer (partition testing)
+    #[cfg(any(test, feature = "partition-testing"))]
+    pub async fn unblock_peer(&self, peer_id: PeerId) -> Result<()> {
+        self.command_tx
+            .send(NetworkCommand::UnblockPeer { peer_id })
+            .await
+            .map_err(|_| NetworkError::Channel("Failed to send unblock_peer command".into()))
+    }
+
+    /// Unblock all peers - restores normal message flow (partition testing)
+    #[cfg(any(test, feature = "partition-testing"))]
+    pub async fn unblock_all_peers(&self) -> Result<()> {
+        self.command_tx
+            .send(NetworkCommand::UnblockAllPeers)
+            .await
+            .map_err(|_| NetworkError::Channel("Failed to send unblock_all_peers command".into()))
+    }
 }
 
 /// The network service manages all P2P networking
@@ -187,14 +223,40 @@ pub struct NetworkService {
     /// ENR bridge for economic primitives (requires univrs-compat feature)
     #[cfg(feature = "univrs-compat")]
     enr_bridge: Arc<EnrBridge>,
+    /// Blocked peers for partition testing
+    #[cfg(any(test, feature = "partition-testing"))]
+    blocked_peers: HashSet<PeerId>,
 }
 
 impl NetworkService {
     /// Create a new network service
+    ///
+    /// Returns a tuple of (service, handle, event_receiver, enr_bridge).
+    /// When `univrs-compat` feature is enabled, the EnrBridge is returned for
+    /// direct access to ENR economic primitives (gradients, credits, elections).
+    #[cfg(feature = "univrs-compat")]
+    pub fn new(
+        keypair: libp2p::identity::Keypair,
+        config: NetworkConfig,
+    ) -> Result<(Self, NetworkHandle, broadcast::Receiver<NetworkEvent>, Arc<EnrBridge>)> {
+        Self::new_inner(keypair, config)
+    }
+
+    /// Create a new network service (without univrs-compat)
+    #[cfg(not(feature = "univrs-compat"))]
     pub fn new(
         keypair: libp2p::identity::Keypair,
         config: NetworkConfig,
     ) -> Result<(Self, NetworkHandle, broadcast::Receiver<NetworkEvent>)> {
+        Self::new_inner(keypair, config)
+    }
+
+    /// Internal implementation of new()
+    #[cfg(feature = "univrs-compat")]
+    fn new_inner(
+        keypair: libp2p::identity::Keypair,
+        config: NetworkConfig,
+    ) -> Result<(Self, NetworkHandle, broadcast::Receiver<NetworkEvent>, Arc<EnrBridge>)> {
         let local_peer_id = keypair.public().to_peer_id();
         info!("Local peer ID: {}", local_peer_id);
 
@@ -263,6 +325,69 @@ impl NetworkService {
             running: false,
             #[cfg(feature = "univrs-compat")]
             enr_bridge,
+            #[cfg(any(test, feature = "partition-testing"))]
+            blocked_peers: HashSet::new(),
+        };
+
+        #[cfg(feature = "univrs-compat")]
+        {
+            let bridge = service.enr_bridge.clone();
+            Ok((service, handle, event_rx, bridge))
+        }
+        #[cfg(not(feature = "univrs-compat"))]
+        Ok((service, handle, event_rx))
+    }
+
+    /// Internal implementation of new() without univrs-compat
+    #[cfg(not(feature = "univrs-compat"))]
+    fn new_inner(
+        keypair: libp2p::identity::Keypair,
+        config: NetworkConfig,
+    ) -> Result<(Self, NetworkHandle, broadcast::Receiver<NetworkEvent>)> {
+        let local_peer_id = keypair.public().to_peer_id();
+        info!("Local peer ID: {}", local_peer_id);
+
+        // Create transport
+        let transport_config = TransportConfig {
+            enable_tcp: config.enable_tcp,
+            enable_quic: config.enable_quic,
+            ..Default::default()
+        };
+        let transport = transport::create_transport(&keypair, &transport_config)?;
+
+        // Create behaviour
+        let behaviour = MycelialBehaviour::new(&keypair, &config)?;
+
+        // Create swarm
+        let swarm = Swarm::new(
+            transport,
+            behaviour,
+            local_peer_id,
+            libp2p::swarm::Config::with_tokio_executor(),
+        );
+
+        // Create channels
+        let (event_tx, event_rx) = broadcast::channel(1024);
+        let (command_tx, command_rx) = mpsc::channel(256);
+
+        let handle = NetworkHandle {
+            command_tx: command_tx.clone(),
+            local_peer_id,
+        };
+
+        let service = Self {
+            swarm,
+            config,
+            peer_manager: Arc::new(PeerManager::default()),
+            event_tx,
+            command_rx,
+            command_tx,
+            subscribed_topics: HashSet::new(),
+            stats: Arc::new(RwLock::new(NetworkStats::default())),
+            start_time: Instant::now(),
+            running: false,
+            #[cfg(any(test, feature = "partition-testing"))]
+            blocked_peers: HashSet::new(),
         };
 
         Ok((service, handle, event_rx))
@@ -423,6 +548,17 @@ impl NetworkService {
                 endpoint,
                 ..
             } => {
+                // Filter connections from blocked peers (partition testing)
+                #[cfg(any(test, feature = "partition-testing"))]
+                if self.blocked_peers.contains(&peer_id) {
+                    debug!(
+                        "Disconnecting blocked peer {} (partition testing)",
+                        peer_id
+                    );
+                    let _ = self.swarm.disconnect_peer_id(peer_id);
+                    return;
+                }
+
                 debug!("Connection established with {}", peer_id);
 
                 self.peer_manager
@@ -530,6 +666,18 @@ impl NetworkService {
                 message_id,
                 message,
             }) => {
+                // Filter messages from blocked peers (partition testing)
+                #[cfg(any(test, feature = "partition-testing"))]
+                if let Some(source) = &message.source {
+                    if self.blocked_peers.contains(source) {
+                        debug!(
+                            "Dropping message from blocked peer {} on topic {}",
+                            source, message.topic
+                        );
+                        return;
+                    }
+                }
+
                 let topic_str = message.topic.to_string();
                 debug!(
                     "Received message on topic {} from {:?}",
@@ -794,6 +942,28 @@ impl NetworkService {
             NetworkCommand::GetStats { response } => {
                 let stats = self.stats.read().clone();
                 let _ = response.send(stats);
+            }
+
+            // Partition testing commands
+            #[cfg(any(test, feature = "partition-testing"))]
+            NetworkCommand::BlockPeer { peer_id } => {
+                self.blocked_peers.insert(peer_id);
+                info!("Blocked peer {} for partition testing", peer_id);
+                // Also disconnect the peer
+                let _ = self.swarm.disconnect_peer_id(peer_id);
+            }
+
+            #[cfg(any(test, feature = "partition-testing"))]
+            NetworkCommand::UnblockPeer { peer_id } => {
+                self.blocked_peers.remove(&peer_id);
+                info!("Unblocked peer {} for partition testing", peer_id);
+            }
+
+            #[cfg(any(test, feature = "partition-testing"))]
+            NetworkCommand::UnblockAllPeers => {
+                let count = self.blocked_peers.len();
+                self.blocked_peers.clear();
+                info!("Unblocked all {} peers for partition testing", count);
             }
 
             NetworkCommand::Shutdown => {

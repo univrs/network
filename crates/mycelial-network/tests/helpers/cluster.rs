@@ -1,10 +1,16 @@
 //! TestCluster - Spawn multiple network nodes for integration testing
 //!
-//! This module provides a TestCluster that spawns 3-5 nodes with:
+//! This module provides a TestCluster that spawns 2-100 nodes with:
 //! - Automatic port allocation (process-unique)
+//! - Hierarchical bootstrap topology (avoids bottleneck on node 0 for large clusters)
 //! - Direct bootstrap connections (no mDNS to avoid cross-test interference)
-//! - Mesh formation waiting
-//! - Cleanup on drop
+//! - Mesh formation waiting with configurable timeout
+//! - Clean shutdown
+//! - Network partition simulation for testing distributed system behavior
+//!
+//! Bootstrap topology:
+//! - Nodes 0-9: star topology (bootstrap to node 0)
+//! - Nodes 10+: hierarchical (nodes 10-19 -> node 1, nodes 20-29 -> node 2, etc.)
 
 use std::sync::atomic::{AtomicU16, Ordering};
 use std::sync::Arc;
@@ -18,6 +24,7 @@ use mycelial_network::{
     event::NetworkEvent,
     service::{NetworkHandle, NetworkService},
 };
+use libp2p::PeerId;
 
 /// Global port counter to ensure unique ports across tests
 static PORT_COUNTER: AtomicU16 = AtomicU16::new(0);
@@ -29,6 +36,7 @@ pub struct TestNode {
     pub enr_bridge: Arc<EnrBridge>,
     pub node_index: usize,
     pub listen_addr: String,
+    pub peer_id: PeerId,
 }
 
 impl TestNode {
@@ -45,13 +53,14 @@ pub struct TestCluster {
 }
 
 impl TestCluster {
-    /// Spawn a cluster of `count` nodes (3-5 recommended)
+    /// Spawn a cluster of `count` nodes (2-100 supported)
     ///
     /// Nodes use direct bootstrap connections (not mDNS) to avoid
-    /// interference from parallel test runs.
+    /// interference from parallel test runs. For clusters larger than 10 nodes,
+    /// a hierarchical bootstrap topology is used to avoid overwhelming node 0.
     pub async fn spawn(count: usize) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         assert!(count >= 2, "Need at least 2 nodes for a cluster");
-        assert!(count <= 10, "Max 10 nodes for test cluster");
+        assert!(count <= 100, "Max 100 nodes for test cluster");
 
         // Get unique base port for this test cluster
         // Use modular arithmetic to stay in valid port range
@@ -63,7 +72,7 @@ impl TestCluster {
             + 20000;
 
         // First pass: create nodes and collect their addresses
-        let mut keypairs = Vec::with_capacity(count);
+        let mut keypairs: Vec<(libp2p::identity::Keypair, PeerId)> = Vec::with_capacity(count);
         let mut listen_addrs = Vec::with_capacity(count);
 
         for i in 0..count {
@@ -71,24 +80,35 @@ impl TestCluster {
             let keypair = libp2p::identity::Keypair::generate_ed25519();
             let peer_id = keypair.public().to_peer_id();
             let addr = format!("/ip4/127.0.0.1/tcp/{}/p2p/{}", port, peer_id);
-            keypairs.push(keypair);
+            keypairs.push((keypair, peer_id));
             listen_addrs.push((port, addr));
         }
 
         let mut nodes = Vec::with_capacity(count);
         let mut shutdown_handles = Vec::with_capacity(count);
 
-        // Second pass: create nodes with bootstrap peers pointing to first node
+        // Second pass: create nodes with hierarchical bootstrap topology
+        // This avoids overwhelming node 0 with connections in large clusters:
+        // - Nodes 0-9: bootstrap to node 0 (node 0 has no bootstrap)
+        // - Nodes 10-19: bootstrap to node 1
+        // - Nodes 20-29: bootstrap to node 2
+        // - etc.
         for i in 0..count {
             let (port, _) = &listen_addrs[i];
-            let keypair = keypairs.remove(0);
+            let (keypair, peer_id) = keypairs.remove(0);
 
-            // All nodes except first bootstrap to first node
-            // First node has no bootstrap peers
-            let bootstrap_peers = if i > 0 {
+            // Hierarchical bootstrap: distribute load across multiple nodes
+            let bootstrap_peers = if i == 0 {
+                // First node has no bootstrap peers
+                vec![]
+            } else if i < 10 {
+                // First 10 nodes bootstrap to node 0 (star for small clusters)
                 vec![listen_addrs[0].1.clone()]
             } else {
-                vec![]
+                // Larger clusters: bootstrap to node (i / 10)
+                // This creates a tree: nodes 10-19 -> node 1, nodes 20-29 -> node 2, etc.
+                let bootstrap_idx = i / 10;
+                vec![listen_addrs[bootstrap_idx].1.clone()]
             };
 
             let config = NetworkConfig {
@@ -100,8 +120,7 @@ impl TestCluster {
                 ..Default::default()
             };
 
-            let (service, handle, event_rx) = NetworkService::new(keypair, config)?;
-            let enr_bridge = service.enr_bridge().clone();
+            let (service, handle, event_rx, enr_bridge) = NetworkService::new(keypair, config)?;
             let listen_addr = listen_addrs[i].1.clone();
 
             // Spawn the network service
@@ -119,6 +138,7 @@ impl TestCluster {
                 enr_bridge,
                 node_index: i,
                 listen_addr,
+                peer_id,
             });
             shutdown_handles.push(handle_clone);
         }
@@ -182,6 +202,136 @@ impl TestCluster {
         for handle in self.shutdown_handles {
             let _ = handle.shutdown().await;
         }
+    }
+
+    // === Partition Testing Methods ===
+
+    /// Create a network partition between two groups of nodes.
+    ///
+    /// After calling this, nodes in group_a cannot communicate with nodes in group_b
+    /// and vice versa. Messages and connections across the partition are blocked.
+    ///
+    /// # Example
+    /// ```rust,ignore
+    /// // Partition nodes [0, 1] from nodes [2, 3]
+    /// cluster.create_partition(&[0, 1], &[2, 3]).await?;
+    /// ```
+    pub async fn create_partition(
+        &self,
+        group_a: &[usize],
+        group_b: &[usize],
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        // Get peer IDs for each group
+        let ids_a: Vec<PeerId> = group_a.iter().map(|&i| self.nodes[i].peer_id).collect();
+        let ids_b: Vec<PeerId> = group_b.iter().map(|&i| self.nodes[i].peer_id).collect();
+
+        // Tell group A to block all peers in group B
+        for &i in group_a {
+            for id in &ids_b {
+                self.nodes[i].handle.block_peer(*id).await?;
+            }
+        }
+
+        // Tell group B to block all peers in group A
+        for &i in group_b {
+            for id in &ids_a {
+                self.nodes[i].handle.block_peer(*id).await?;
+            }
+        }
+
+        // Give time for disconnect to propagate
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        Ok(())
+    }
+
+    /// Heal a partition between two groups of nodes.
+    ///
+    /// After calling this, nodes can communicate across the former partition again.
+    pub async fn heal_partition(
+        &self,
+        group_a: &[usize],
+        group_b: &[usize],
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        // Get peer IDs for each group
+        let ids_a: Vec<PeerId> = group_a.iter().map(|&i| self.nodes[i].peer_id).collect();
+        let ids_b: Vec<PeerId> = group_b.iter().map(|&i| self.nodes[i].peer_id).collect();
+
+        // Unblock group B peers from group A
+        for &i in group_a {
+            for id in &ids_b {
+                self.nodes[i].handle.unblock_peer(*id).await?;
+            }
+        }
+
+        // Unblock group A peers from group B
+        for &i in group_b {
+            for id in &ids_a {
+                self.nodes[i].handle.unblock_peer(*id).await?;
+            }
+        }
+
+        // Trigger reconnection by dialing across the partition
+        for &idx_a in group_a.iter().take(1) {
+            for &idx_b in group_b.iter().take(1) {
+                let addr: libp2p::Multiaddr = self.nodes[idx_b].listen_addr.parse()?;
+                let _ = self.nodes[idx_a].handle.dial(addr).await;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Heal all partitions - unblock all peers on all nodes.
+    pub async fn heal_all_partitions(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        for node in &self.nodes {
+            node.handle.unblock_all_peers().await?;
+        }
+        Ok(())
+    }
+
+    /// Isolate a single node from all other nodes in the cluster.
+    pub async fn isolate_node(&self, node_idx: usize) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        let isolated_peer = self.nodes[node_idx].peer_id;
+
+        // Block from perspective of the isolated node
+        for (i, node) in self.nodes.iter().enumerate() {
+            if i != node_idx {
+                // The isolated node blocks all others
+                self.nodes[node_idx].handle.block_peer(node.peer_id).await?;
+                // All others block the isolated node
+                node.handle.block_peer(isolated_peer).await?;
+            }
+        }
+
+        // Give time for disconnect to propagate
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        Ok(())
+    }
+
+    /// Rejoin an isolated node to the cluster.
+    pub async fn rejoin_node(&self, node_idx: usize) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        let rejoining_peer = self.nodes[node_idx].peer_id;
+
+        // Unblock from all perspectives
+        for (i, node) in self.nodes.iter().enumerate() {
+            if i != node_idx {
+                self.nodes[node_idx].handle.unblock_peer(node.peer_id).await?;
+                node.handle.unblock_peer(rejoining_peer).await?;
+            }
+        }
+
+        // Trigger reconnection
+        if node_idx > 0 {
+            let addr: libp2p::Multiaddr = self.nodes[0].listen_addr.parse()?;
+            let _ = self.nodes[node_idx].handle.dial(addr).await;
+        } else if self.nodes.len() > 1 {
+            let addr: libp2p::Multiaddr = self.nodes[1].listen_addr.parse()?;
+            let _ = self.nodes[node_idx].handle.dial(addr).await;
+        }
+
+        Ok(())
     }
 }
 

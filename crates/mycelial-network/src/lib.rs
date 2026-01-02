@@ -26,8 +26,9 @@
 //!     let keypair = Keypair::generate_ed25519();
 //!
 //!     // Create network service
+//!     // With univrs-compat feature (default), returns (service, handle, events, enr_bridge)
 //!     let config = NetworkConfig::local_test(4001);
-//!     let (service, handle, mut events) = NetworkService::new(keypair, config)?;
+//!     let (service, handle, mut events, _enr_bridge) = NetworkService::new(keypair, config)?;
 //!
 //!     // Spawn the service
 //!     tokio::spawn(async move {
@@ -62,6 +63,10 @@ pub mod transport;
 #[cfg(feature = "univrs-compat")]
 pub mod enr_bridge;
 
+// Partition testing module (for network partition simulation in tests)
+#[cfg(any(test, feature = "partition-testing"))]
+pub mod partition;
+
 // OpenRaft consensus layer (Phase 1)
 #[cfg(feature = "openraft")]
 pub mod raft;
@@ -77,6 +82,10 @@ pub use event::{NetworkEvent, NetworkStats};
 pub use peer::{ConnectionState, PeerInfo, PeerManager};
 pub use service::{NetworkCommand, NetworkHandle, NetworkService};
 pub use transport::{create_transport, extract_peer_id, parse_multiaddr, TransportConfig};
+
+// Partition testing re-exports
+#[cfg(any(test, feature = "partition-testing"))]
+pub use partition::{PartitionId, PartitionSimulator, PartitionStats};
 
 // Test utilities - available with test-utils feature or in tests
 // TODO: Add test_utils module to service when needed

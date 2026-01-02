@@ -85,6 +85,8 @@ pub struct AppState {
     pub subscribed_topics: RwLock<Vec<String>>,
     /// Economics state manager for tracking credit lines, proposals, vouches, resources
     pub economics: EconomicsStateManager,
+    /// ENR bridge for economic primitives (gradients, credits, elections, septal gates)
+    pub enr_bridge: Arc<mycelial_network::enr_bridge::EnrBridge>,
 }
 
 #[tokio::main]
@@ -150,10 +152,11 @@ async fn main() -> anyhow::Result<()> {
     }
 
     // Create network service
-    let (network_service, network_handle, mut event_rx) =
+    // With univrs-compat feature (default), EnrBridge is returned for direct access
+    let (network_service, network_handle, mut event_rx, enr_bridge) =
         NetworkService::new(keypair.clone(), config)?;
 
-    info!("Network service created");
+    info!("Network service created (EnrBridge enabled)");
 
     // Create broadcast channel for WebSocket events
     let (event_tx, _) = broadcast::channel(256);
@@ -169,6 +172,7 @@ async fn main() -> anyhow::Result<()> {
         node_name: args.name.clone(),
         subscribed_topics: RwLock::new(Vec::new()),
         economics: EconomicsStateManager::new(),
+        enr_bridge,
     });
 
     // Spawn network service
