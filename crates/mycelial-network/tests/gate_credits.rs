@@ -24,7 +24,7 @@ use mycelial_network::enr_bridge::INITIAL_NODE_CREDITS;
 ///
 /// Run with: cargo test --test gate_credits -- --ignored
 #[tokio::test]
-#[ignore = "Integration test - requires clean network environment"]
+// Note: Run with --test-threads=1 to avoid port conflicts
 async fn test_credit_transfer_with_tax() {
     let _ = tracing_subscriber::fmt()
         .with_env_filter("mycelial_network=debug,gate_credits=debug")
@@ -126,7 +126,7 @@ async fn test_credit_transfer_with_tax() {
 
 /// Test that self-transfer is rejected
 #[tokio::test]
-#[ignore = "Integration test - requires clean network environment"]
+// Note: Run with --test-threads=1 to avoid port conflicts
 async fn test_self_transfer_rejected() {
     let _ = tracing_subscriber::fmt()
         .with_env_filter("mycelial_network=info")
@@ -170,7 +170,7 @@ async fn test_self_transfer_rejected() {
 
 /// Test that transfer of more than balance is rejected
 #[tokio::test]
-#[ignore = "Integration test - requires clean network environment"]
+// Note: Run with --test-threads=1 to avoid port conflicts
 async fn test_insufficient_balance_rejected() {
     let _ = tracing_subscriber::fmt()
         .with_env_filter("mycelial_network=info")
@@ -217,7 +217,7 @@ async fn test_insufficient_balance_rejected() {
 
 /// Test multiple sequential transfers
 #[tokio::test]
-#[ignore = "Integration test - requires clean network environment"]
+// Note: Run with --test-threads=1 to avoid port conflicts
 async fn test_multiple_transfers() {
     let _ = tracing_subscriber::fmt()
         .with_env_filter("mycelial_network=info")

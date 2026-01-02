@@ -6,6 +6,7 @@ edition.workspace = true
 [features]
 default = ["univrs-compat"]
 test-utils = []
+partition-testing = []
 univrs-compat = ["dep:univrs-enr", "mycelial-core/univrs-compat"]
 openraft = ["dep:openraft", "dep:sled", "dep:bincode"]
 

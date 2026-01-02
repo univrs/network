@@ -25,6 +25,13 @@ use mycelial_protocol::{
     VouchAck as ProtocolVouchAck, VouchMessage, VouchRequest,
 };
 
+// ENR Bridge types for economic primitives
+use mycelial_network::enr_bridge::LocalNodeMetrics;
+use univrs_enr::{
+    core::{Credits, NodeId},
+    nexus::ResourceGradient,
+};
+
 /// Handle WebSocket upgrade
 pub async fn ws_handler(
     ws: WebSocketUpgrade,
@@ -650,31 +657,62 @@ async fn handle_client_message(msg: ClientMessage, state: &AppState) {
 
             let timestamp = chrono::Utc::now().timestamp_millis();
 
-            // Broadcast gradient update to all clients
-            let gradient_msg = WsMessage::GradientUpdate {
-                source: state.local_peer_id.to_string(),
+            // Create gradient and broadcast via EnrBridge
+            let gradient = ResourceGradient {
                 cpu_available,
                 memory_available,
                 bandwidth_available,
                 storage_available,
-                timestamp,
+                ..Default::default()
             };
-            let _ = state.event_tx.send(gradient_msg);
+
+            match state.enr_bridge.broadcast_gradient(gradient).await {
+                Ok(()) => {
+                    info!("Gradient broadcast successful via EnrBridge");
+                    // Echo to local WebSocket clients
+                    let gradient_msg = WsMessage::GradientUpdate {
+                        source: state.local_peer_id.to_string(),
+                        cpu_available,
+                        memory_available,
+                        bandwidth_available,
+                        storage_available,
+                        timestamp,
+                    };
+                    let _ = state.event_tx.send(gradient_msg);
+                }
+                Err(e) => {
+                    error!("Failed to broadcast gradient via EnrBridge: {}", e);
+                    let _ = state.event_tx.send(WsMessage::Error {
+                        message: format!("Gradient broadcast failed: {}", e),
+                    });
+                }
+            }
         }
 
         ClientMessage::StartElection { region_id } => {
             info!("StartElection: region_id='{}'", region_id);
 
             let timestamp = chrono::Utc::now().timestamp_millis();
-            let election_id = timestamp as u64; // Simple ID generation
 
-            let election_msg = WsMessage::ElectionAnnouncement {
-                election_id,
-                initiator: state.local_peer_id.to_string(),
-                region_id,
-                timestamp,
-            };
-            let _ = state.event_tx.send(election_msg);
+            // Trigger election via EnrBridge
+            match state.enr_bridge.trigger_election(region_id.clone()).await {
+                Ok(election_id) => {
+                    info!("Election triggered successfully: id={}", election_id);
+                    let election_msg = WsMessage::ElectionAnnouncement {
+                        election_id,
+                        initiator: state.local_peer_id.to_string(),
+                        region_id,
+                        timestamp,
+                    };
+                    let _ = state.event_tx.send(election_msg);
+                }
+                Err(e) => {
+                    error!("Failed to trigger election: {}", e);
+                    let _ = state.event_tx.send(WsMessage::Error {
+                        message: format!("Election failed: {}", e),
+                    });
+                }
+            }
         }
 
         ClientMessage::RegisterCandidacy {
@@ -688,16 +726,45 @@ async fn handle_client_message(msg: ClientMessage, state: &AppState) {
 
             let timestamp = chrono::Utc::now().timestamp_millis();
 
-            let candidacy_msg = WsMessage::ElectionCandidacy {
-                election_id,
-                candidate: state.local_peer_id.to_string(),
-                uptime,
-                cpu_available,
-                memory_available,
+            // Create metrics for candidacy
+            // uptime is in seconds from client, normalize to fraction (assume 1 week = 604800 secs as reference)
+            let uptime_fraction = (uptime as f64 / 604800.0).clamp(0.0, 1.0);
+            let metrics = LocalNodeMetrics {
+                uptime: uptime_fraction,
+                bandwidth: ((cpu_available + memory_available) * 50_000_000.0) as u64, // Estimate bandwidth
                 reputation,
-                timestamp,
+                connection_count: 10, // Default
             };
-            let _ = state.event_tx.send(candidacy_msg);
+
+            // Submit candidacy via EnrBridge
+            match state
+                .enr_bridge
+                .submit_candidacy(election_id, metrics)
+                .await
+            {
+                Ok(()) => {
+                    info!(
+                        "Candidacy submitted successfully for election {}",
+                        election_id
+                    );
+                    let candidacy_msg = WsMessage::ElectionCandidacy {
+                        election_id,
+                        candidate: state.local_peer_id.to_string(),
+                        uptime: uptime * 1000, // Convert seconds to millis
+                        cpu_available,
+                        memory_available,
+                        reputation,
+                        timestamp,
+                    };
+                    let _ = state.event_tx.send(candidacy_msg);
+                }
+                Err(e) => {
+                    error!("Failed to submit candidacy: {}", e);
+                    let _ = state.event_tx.send(WsMessage::Error {
+                        message: format!("Candidacy failed: {}", e),
+                    });
+                }
+            }
         }
 
         ClientMessage::VoteElection {
@@ -711,13 +778,39 @@ async fn handle_client_message(msg: ClientMessage, state: &AppState) {
 
             let timestamp = chrono::Utc::now().timestamp_millis();
 
-            let vote_msg = WsMessage::ElectionVote {
-                election_id,
-                voter: state.local_peer_id.to_string(),
-                candidate,
-                timestamp,
-            };
-            let _ = state.event_tx.send(vote_msg);
+            // Parse candidate NodeId from hex string
+            match parse_node_id(&candidate) {
+                Ok(candidate_id) => {
+                    match state
+                        .enr_bridge
+                        .vote_for_candidate(election_id, candidate_id)
+                        .await
+                    {
+                        Ok(()) => {
+                            info!("Vote cast successfully for election {}", election_id);
+                            let vote_msg = WsMessage::ElectionVote {
+                                election_id,
+                                voter: state.local_peer_id.to_string(),
+                                candidate,
+                                timestamp,
+                            };
+                            let _ = state.event_tx.send(vote_msg);
+                        }
+                        Err(e) => {
+                            error!("Failed to cast vote: {}", e);
+                            let _ = state.event_tx.send(WsMessage::Error {
+                                message: format!("Vote failed: {}", e),
+                            });
+                        }
+                    }
+                }
+                Err(e) => {
+                    error!("Invalid candidate ID: {}", e);
+                    let _ = state.event_tx.send(WsMessage::Error {
+                        message: format!("Invalid candidate ID: {}", e),
+                    });
+                }
+            }
         }
 
         ClientMessage::SendEnrCredit { to, amount } => {
@@ -726,25 +819,81 @@ async fn handle_client_message(msg: ClientMessage, state: &AppState) {
             let timestamp = chrono::Utc::now().timestamp_millis();
             static NONCE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
             let nonce = NONCE.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            let tax = amount / 100; // 1% tax
 
-            let transfer_msg = WsMessage::EnrCreditTransfer {
-                from: state.local_peer_id.to_string(),
-                to: to.clone(),
-                amount,
-                tax,
-                nonce,
-                timestamp,
-            };
-            let _ = state.event_tx.send(transfer_msg);
+            // Parse recipient NodeId from hex string
+            match parse_node_id(&to) {
+                Ok(to_node) => {
+                    let credits = Credits::new(amount);
 
-            // Update sender's balance (decrease)
-            let balance_msg = WsMessage::EnrBalanceUpdate {
-                node_id: state.local_peer_id.to_string(),
-                balance: 0, // Placeholder - real impl would track actual balance
-                timestamp,
-            };
-            let _ = state.event_tx.send(balance_msg);
+                    // Transfer credits via EnrBridge
+                    match state.enr_bridge.transfer_credits(to_node, credits).await {
+                        Ok(()) => {
+                            info!("Credit transfer successful: {} -> {}", amount, to);
+
+                            // Get actual balance after transfer
+                            let balance = state.enr_bridge.local_balance().await;
+                            let tax = amount / 50; // 2% entropy tax
+
+                            let transfer_msg = WsMessage::EnrCreditTransfer {
+                                from: state.local_peer_id.to_string(),
+                                to: to.clone(),
+                                amount,
+                                tax,
+                                nonce,
+                                timestamp,
+                            };
+                            let _ = state.event_tx.send(transfer_msg);
+
+                            // Send actual balance update
+                            let balance_msg = WsMessage::EnrBalanceUpdate {
+                                node_id: state.local_peer_id.to_string(),
+                                balance: balance.amount,
+                                timestamp,
+                            };
+                            let _ = state.event_tx.send(balance_msg);
+                        }
+                        Err(e) => {
+                            error!("Failed to transfer credits: {}", e);
+                            let _ = state.event_tx.send(WsMessage::Error {
+                                message: format!("Credit transfer failed: {}", e),
+                            });
+                        }
+                    }
+                }
+                Err(e) => {
+                    error!("Invalid recipient ID: {}", e);
+                    let _ = state.event_tx.send(WsMessage::Error {
+                        message: format!("Invalid recipient ID: {}", e),
+                    });
+                }
+            }
         }
     }
+}
+
+/// Parse a hex-encoded NodeId string into a NodeId
+fn parse_node_id(s: &str) -> Result<NodeId, String> {
+    // NodeId is 32 bytes, typically hex-encoded (64 chars)
+    // Also support peer_id format (base58)
+
+    // First try hex decode
+    if let Ok(bytes) = hex::decode(s) {
+        if bytes.len() == 32 {
+            let mut arr = [0u8; 32];
+            arr.copy_from_slice(&bytes);
+            return Ok(NodeId::from_bytes(arr));
+        }
+        // If not exactly 32 bytes, pad or truncate
+        let mut arr = [0u8; 32];
+        let len = bytes.len().min(32);
+        arr[..len].copy_from_slice(&bytes[..len]);
+        return Ok(NodeId::from_bytes(arr));
+    }
+
+    // If hex fails, try using the string bytes directly (for peer_id format)
+    let bytes = s.as_bytes();
+    let mut arr = [0u8; 32];
+    let len = bytes.len().min(32);
+    arr[..len].copy_from_slice(&bytes[..len]);
+    Ok(NodeId::from_bytes(arr))
 }

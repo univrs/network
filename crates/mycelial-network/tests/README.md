@@ -22,6 +22,7 @@ tests/
 | Test | Description | Assertion |
 |------|-------------|-----------|
 | `test_gradient_propagates_to_all_nodes` | 3-node cluster | Gradient reaches all nodes within 15s |
+| `test_cluster_20_nodes` | 20-node cluster (scale test) | Gradient reaches 75%+ of nodes within 30s |
 | `test_gradient_propagates_5_nodes` | 5-node cluster | Gradient reaches all nodes within 15s |
 
 ### Credit Tests (`gate_credits.rs`)
@@ -69,18 +70,18 @@ Features:
 
 ## Running Tests
 
-Tests are marked `#[ignore]` because they require a clean network environment
-(WSL2/Docker bridge interfaces can cause dial errors).
+**Important**: Tests must be run with `--test-threads=1` to avoid port conflicts
+between concurrent test clusters.
 
 ```bash
-# Run all gate tests
-cargo test --package mycelial-network --test gate_gradient --test gate_credits --test gate_election -- --ignored
+# Run all gate tests (MUST use --test-threads=1)
+cargo test --package mycelial-network --test gate_gradient --test gate_credits --test gate_election -- --test-threads=1
 
 # Run specific test
-cargo test --package mycelial-network --test gate_credits test_credit_transfer_with_tax -- --ignored --nocapture
+cargo test --package mycelial-network --test gate_credits test_credit_transfer_with_tax -- --test-threads=1 --nocapture
 
 # Run with verbose logging
-RUST_LOG=mycelial_network=debug cargo test --test gate_gradient -- --ignored --nocapture
+RUST_LOG=mycelial_network=debug cargo test --test gate_gradient -- --test-threads=1 --nocapture
 ```
 
 ## Running in Docker (Recommended)
@@ -121,11 +122,11 @@ docker compose -f docker-compose.test.yml down -v
 
 ## Local Execution
 
-Tests can run locally but may fail due to network interface interference:
+Tests can run locally. Ensure sequential execution to avoid port conflicts:
 
 ```bash
-# May fail on WSL2 or hosts with Docker bridge interfaces
-cargo test --package mycelial-network --test gate_gradient -- --ignored --nocapture
+# Run all gate tests locally (sequential mode required)
+cargo test --package mycelial-network --test gate_gradient --test gate_credits --test gate_election -- --test-threads=1 --nocapture
 ```
 
 ### Network Requirements (Local)

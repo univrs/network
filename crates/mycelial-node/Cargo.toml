@@ -12,6 +12,9 @@ mycelial-core = { path = "../mycelial-core" }
 mycelial-network = { path = "../mycelial-network" }
 mycelial-protocol = { path = "../mycelial-protocol" }
 mycelial-state = { path = "../mycelial-state" }
+# ENR types for WebSocket -> EnrBridge integration
+univrs-enr = { workspace = true }
+hex = "0.4"
 tokio.workspace = true
 tokio-tungstenite = "0.24"
 axum = { version = "0.7", features = ["ws"] }
