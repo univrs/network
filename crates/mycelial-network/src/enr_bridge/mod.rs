@@ -242,7 +242,9 @@ impl EnrBridge {
         election_id: u64,
         candidate: univrs_enr::core::NodeId,
     ) -> Result<(), ElectionError> {
-        self.election.vote_for_candidate(election_id, candidate).await
+        self.election
+            .vote_for_candidate(election_id, candidate)
+            .await
     }
 
     // ─────────────────────────────────────────────────────────────────────────────

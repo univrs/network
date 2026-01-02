@@ -737,9 +737,16 @@ async fn handle_client_message(msg: ClientMessage, state: &AppState) {
             };
 
             // Submit candidacy via EnrBridge
-            match state.enr_bridge.submit_candidacy(election_id, metrics).await {
+            match state
+                .enr_bridge
+                .submit_candidacy(election_id, metrics)
+                .await
+            {
                 Ok(()) => {
-                    info!("Candidacy submitted successfully for election {}", election_id);
+                    info!(
+                        "Candidacy submitted successfully for election {}",
+                        election_id
+                    );
                     let candidacy_msg = WsMessage::ElectionCandidacy {
                         election_id,
                         candidate: state.local_peer_id.to_string(),
@@ -774,7 +781,11 @@ async fn handle_client_message(msg: ClientMessage, state: &AppState) {
             // Parse candidate NodeId from hex string
             match parse_node_id(&candidate) {
                 Ok(candidate_id) => {
-                    match state.enr_bridge.vote_for_candidate(election_id, candidate_id).await {
+                    match state
+                        .enr_bridge
+                        .vote_for_candidate(election_id, candidate_id)
+                        .await
+                    {
                         Ok(()) => {
                             info!("Vote cast successfully for election {}", election_id);
                             let vote_msg = WsMessage::ElectionVote {

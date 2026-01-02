@@ -8,8 +8,8 @@
 
 mod helpers;
 
-use std::time::Duration;
 use helpers::TestCluster;
+use std::time::Duration;
 
 /// Test that creating a partition disconnects nodes across the partition boundary.
 ///

@@ -238,7 +238,12 @@ impl NetworkService {
     pub fn new(
         keypair: libp2p::identity::Keypair,
         config: NetworkConfig,
-    ) -> Result<(Self, NetworkHandle, broadcast::Receiver<NetworkEvent>, Arc<EnrBridge>)> {
+    ) -> Result<(
+        Self,
+        NetworkHandle,
+        broadcast::Receiver<NetworkEvent>,
+        Arc<EnrBridge>,
+    )> {
         Self::new_inner(keypair, config)
     }
 
@@ -256,7 +261,12 @@ impl NetworkService {
     fn new_inner(
         keypair: libp2p::identity::Keypair,
         config: NetworkConfig,
-    ) -> Result<(Self, NetworkHandle, broadcast::Receiver<NetworkEvent>, Arc<EnrBridge>)> {
+    ) -> Result<(
+        Self,
+        NetworkHandle,
+        broadcast::Receiver<NetworkEvent>,
+        Arc<EnrBridge>,
+    )> {
         let local_peer_id = keypair.public().to_peer_id();
         info!("Local peer ID: {}", local_peer_id);
 
@@ -551,10 +561,7 @@ impl NetworkService {
                 // Filter connections from blocked peers (partition testing)
                 #[cfg(any(test, feature = "partition-testing"))]
                 if self.blocked_peers.contains(&peer_id) {
-                    debug!(
-                        "Disconnecting blocked peer {} (partition testing)",
-                        peer_id
-                    );
+                    debug!("Disconnecting blocked peer {} (partition testing)", peer_id);
                     let _ = self.swarm.disconnect_peer_id(peer_id);
                     return;
                 }

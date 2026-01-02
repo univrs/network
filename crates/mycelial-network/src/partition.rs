@@ -384,7 +384,10 @@ mod tests {
         // peer_b is in a different partition
         // We need to simulate that peer_b joined partition_b
         // For the local simulator, it sees peer_b in peer_to_partition as partition_b
-        simulator.peer_to_partition.write().insert(peer_b, partition_b);
+        simulator
+            .peer_to_partition
+            .write()
+            .insert(peer_b, partition_b);
         assert!(!simulator.allows_communication(&peer_b));
     }
 

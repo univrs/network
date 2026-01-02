@@ -18,13 +18,13 @@ use std::time::Duration;
 use tokio::sync::broadcast;
 use tokio::time::timeout;
 
+use libp2p::PeerId;
 use mycelial_network::{
     config::NetworkConfig,
     enr_bridge::EnrBridge,
     event::NetworkEvent,
     service::{NetworkHandle, NetworkService},
 };
-use libp2p::PeerId;
 
 /// Global port counter to ensure unique ports across tests
 static PORT_COUNTER: AtomicU16 = AtomicU16::new(0);
@@ -283,7 +283,9 @@ impl TestCluster {
     }
 
     /// Heal all partitions - unblock all peers on all nodes.
-    pub async fn heal_all_partitions(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn heal_all_partitions(
+        &self,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         for node in &self.nodes {
             node.handle.unblock_all_peers().await?;
         }
@@ -291,7 +293,10 @@ impl TestCluster {
     }
 
     /// Isolate a single node from all other nodes in the cluster.
-    pub async fn isolate_node(&self, node_idx: usize) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn isolate_node(
+        &self,
+        node_idx: usize,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let isolated_peer = self.nodes[node_idx].peer_id;
 
         // Block from perspective of the isolated node
@@ -311,13 +316,19 @@ impl TestCluster {
     }
 
     /// Rejoin an isolated node to the cluster.
-    pub async fn rejoin_node(&self, node_idx: usize) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn rejoin_node(
+        &self,
+        node_idx: usize,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let rejoining_peer = self.nodes[node_idx].peer_id;
 
         // Unblock from all perspectives
         for (i, node) in self.nodes.iter().enumerate() {
             if i != node_idx {
-                self.nodes[node_idx].handle.unblock_peer(node.peer_id).await?;
+                self.nodes[node_idx]
+                    .handle
+                    .unblock_peer(node.peer_id)
+                    .await?;
                 node.handle.unblock_peer(rejoining_peer).await?;
             }
         }
