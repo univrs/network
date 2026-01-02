@@ -334,6 +334,37 @@ cd dashboard && npx tsc --noEmit
 
 ---
 
+## MANDATORY Pre-PR Checks
+
+**CRITICAL**: Before creating ANY Pull Request, you MUST run these checks and fix all issues:
+
+```bash
+# Run the pre-PR check script
+./scripts/pre-pr-check.sh
+
+# Or manually:
+# 1. Format check (MUST pass)
+cargo fmt --all -- --check
+# If fails: cargo fmt --all
+
+# 2. Clippy lint (MUST pass with zero warnings)
+cargo clippy --all-targets --all-features -- -D warnings
+
+# 3. Build verification
+cargo build --all-features
+
+# 4. Unit tests
+cargo test --all-features --lib
+```
+
+DO NOT create a PR if any of these checks fail. Fix the issues first.
+
+Common fixes:
+- `cargo fmt --all` - Auto-fix formatting
+- Remove unused imports
+- Prefix unused variables with `_`
+- Address dead code warnings
+
 ## important-instruction-reminders
 
 - Do what has been asked; nothing more, nothing less
@@ -341,3 +372,4 @@ cd dashboard && npx tsc --noEmit
 - ALWAYS prefer editing existing files to creating new ones
 - NEVER proactively create documentation files unless explicitly requested
 - Never save working files to the root folder - use appropriate subdirectories
+- ALWAYS run `/pre-pr` before creating any Pull Request

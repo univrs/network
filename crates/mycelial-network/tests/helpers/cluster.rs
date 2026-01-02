@@ -27,7 +27,11 @@ use mycelial_network::{
 };
 
 /// Global port counter to ensure unique ports across tests
+/// Uses larger increments to avoid TIME_WAIT conflicts
 static PORT_COUNTER: AtomicU16 = AtomicU16::new(0);
+
+/// Port range allocated per test (with buffer for TIME_WAIT)
+const PORT_RANGE_PER_TEST: u16 = 250;
 
 /// A test node with its handle and ENR bridge
 pub struct TestNode {
@@ -63,13 +67,12 @@ impl TestCluster {
         assert!(count <= 100, "Max 100 nodes for test cluster");
 
         // Get unique base port for this test cluster
-        // Use modular arithmetic to stay in valid port range
-        let cluster_offset = PORT_COUNTER.fetch_add(count as u16 * 2, Ordering::SeqCst) % 10000;
+        // Use large increments to avoid TIME_WAIT conflicts from previous tests
+        let test_index = PORT_COUNTER.fetch_add(1, Ordering::SeqCst);
+        let cluster_offset = (test_index as u32 * PORT_RANGE_PER_TEST as u32) % 30000;
         let base_port = 20000u16
-            .wrapping_add((std::process::id() as u16 % 100) * 100)
-            .wrapping_add(cluster_offset)
-            % 40000
-            + 20000;
+            .wrapping_add((std::process::id() as u16 % 50) * 200)
+            .wrapping_add(cluster_offset as u16);
 
         // First pass: create nodes and collect their addresses
         let mut keypairs: Vec<(libp2p::identity::Keypair, PeerId)> = Vec::with_capacity(count);
@@ -141,10 +144,24 @@ impl TestCluster {
                 peer_id,
             });
             shutdown_handles.push(handle_clone);
+
+            // For larger clusters, add a brief delay between spawns to allow
+            // hierarchical bootstrap parents to be ready before children dial
+            if count > 10 && i > 0 && i % 10 == 0 {
+                tokio::time::sleep(Duration::from_millis(50)).await;
+            }
         }
 
         // Give nodes time to start listening before returning
-        tokio::time::sleep(Duration::from_millis(100)).await;
+        // Scale wait time based on cluster size to accommodate cascading bootstrap
+        let initial_wait = if count <= 5 {
+            200 // Small clusters: 200ms
+        } else if count <= 20 {
+            500 // Medium clusters: 500ms
+        } else {
+            1000 // Large clusters: 1s
+        };
+        tokio::time::sleep(Duration::from_millis(initial_wait)).await;
 
         Ok(Self {
             nodes,
@@ -176,7 +193,15 @@ impl TestCluster {
 
                 if all_connected {
                     // Additional wait for gossipsub mesh to stabilize
-                    tokio::time::sleep(Duration::from_millis(500)).await;
+                    // Scale based on cluster size - larger clusters need more heartbeat cycles
+                    let stabilization_wait = if self.nodes.len() <= 5 {
+                        500
+                    } else if self.nodes.len() <= 20 {
+                        1000
+                    } else {
+                        2000
+                    };
+                    tokio::time::sleep(Duration::from_millis(stabilization_wait)).await;
                     return Ok::<(), Box<dyn std::error::Error + Send + Sync>>(());
                 }
 
