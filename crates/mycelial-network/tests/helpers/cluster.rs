@@ -369,6 +369,61 @@ impl TestCluster {
 
         Ok(())
     }
+
+    // === Election Helper Methods ===
+
+    /// Wait for a specific node to have no election in progress.
+    ///
+    /// This is useful before triggering a new election to avoid
+    /// `ElectionInProgress` errors from race conditions during mesh formation.
+    ///
+    /// Returns Ok(()) when no election is in progress, or Err if timeout expires.
+    pub async fn wait_for_no_election(
+        &self,
+        node_idx: usize,
+        timeout_secs: u64,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        let deadline = Duration::from_secs(timeout_secs);
+
+        timeout(deadline, async {
+            loop {
+                if !self.nodes[node_idx].enr_bridge.election_in_progress().await {
+                    return Ok::<(), Box<dyn std::error::Error + Send + Sync>>(());
+                }
+                tokio::time::sleep(Duration::from_millis(500)).await;
+            }
+        })
+        .await
+        .map_err(|_| "Timeout waiting for election to clear")?
+    }
+
+    /// Wait for all nodes to have no election in progress.
+    ///
+    /// Useful before tests that need to trigger elections from scratch.
+    pub async fn wait_for_all_elections_clear(
+        &self,
+        timeout_secs: u64,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        let deadline = Duration::from_secs(timeout_secs);
+
+        timeout(deadline, async {
+            loop {
+                let mut any_in_progress = false;
+                for node in &self.nodes {
+                    if node.enr_bridge.election_in_progress().await {
+                        any_in_progress = true;
+                        break;
+                    }
+                }
+                if !any_in_progress {
+                    return Ok::<(), Box<dyn std::error::Error + Send + Sync>>(());
+                }
+                tokio::time::sleep(Duration::from_millis(500)).await;
+            }
+        })
+        .await
+        .map_err(|_| "Timeout waiting for all elections to clear")?
+    }
 }
 
 // Note: Explicit shutdown() should be called before dropping

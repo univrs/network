@@ -119,6 +119,13 @@ async fn test_election_announcement_20_nodes() {
             .await;
     }
 
+    // Wait for any elections triggered during mesh formation to clear
+    // Election timeout is 30 seconds, so wait up to 35 seconds
+    cluster
+        .wait_for_no_election(10, 35)
+        .await
+        .expect("Timeout waiting for existing election to clear");
+
     let start = Instant::now();
 
     // Trigger from middle of cluster
@@ -339,6 +346,13 @@ async fn test_election_recovery() {
             .update_metrics(metrics)
             .await;
     }
+
+    // Wait for any elections triggered during mesh formation to clear
+    // Election timeout is 30 seconds, so wait up to 35 seconds
+    cluster
+        .wait_for_no_election(0, 35)
+        .await
+        .expect("Timeout waiting for existing election to clear");
 
     // Create partition [0,1,2] vs [3,4,5]
     cluster

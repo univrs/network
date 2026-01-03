@@ -217,7 +217,8 @@ We welcome contributions! Please:
 
 ## Disclaimer
 
-> [!IMPORTANT] > **This is an experimental system. _We break things frequently_.**
+> [!IMPORTANT]
+> **This is an experimental system. _We break things frequently_.**
 
 - Not accepting contributions yet (but we plan to!)
 - No stability guarantees
