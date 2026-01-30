@@ -7,8 +7,16 @@ edition.workspace = true
 name = "mycelial-node"
 path = "src/main.rs"
 
+[features]
+default = []
+# Enable Meshtastic LoRa bridge support
+meshtastic = ["dep:mycelial-meshtastic"]
+# Enable Meshtastic with serial port support (requires libudev-dev on Linux)
+meshtastic-serial = ["meshtastic", "mycelial-meshtastic/serial"]
+
 [dependencies]
 mycelial-core = { path = "../mycelial-core" }
+mycelial-meshtastic = { path = "../mycelial-meshtastic", optional = true }
 mycelial-network = { path = "../mycelial-network" }
 mycelial-protocol = { path = "../mycelial-protocol" }
 mycelial-state = { path = "../mycelial-state" }
