@@ -627,6 +627,13 @@ pub struct MockInterface {
 }
 
 #[cfg(test)]
+impl Default for MockInterface {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(test)]
 impl MockInterface {
     /// Create a new mock interface for testing.
     pub fn new() -> Self {
