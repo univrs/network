@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
     "crates/mycelial-core",
+    "crates/mycelial-meshtastic",
     "crates/mycelial-network",
     "crates/mycelial-protocol",
     "crates/mycelial-state",
@@ -94,3 +95,5 @@ parking_lot = "0.12"
 lru = "0.12"
 uuid = { version = "1.10", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
+humantime = "2.1"
+bytes = "1.7"
