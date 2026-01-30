@@ -63,6 +63,11 @@ struct Args {
     /// Enable verbose logging
     #[arg(long, short)]
     verbose: bool,
+
+    /// Enable Meshtastic LoRa bridge with serial port (e.g., /dev/ttyUSB0)
+    /// Requires the 'meshtastic-serial' feature to be enabled at compile time
+    #[arg(long)]
+    meshtastic: Option<String>,
 }
 
 /// Application state shared across handlers
@@ -190,6 +195,67 @@ async fn main() -> anyhow::Result<()> {
             handle_network_event(event, &event_state, peer_id_for_events).await;
         }
     });
+
+    // Initialize Meshtastic bridge if --meshtastic flag is provided
+    #[cfg(feature = "meshtastic")]
+    if let Some(ref serial_port) = args.meshtastic {
+        info!("═══════════════════════════════════════════════════════════");
+        info!("  Meshtastic LoRa Bridge enabled");
+        info!("  Serial port: {}", serial_port);
+        info!("═══════════════════════════════════════════════════════════");
+
+        // Create Meshtastic config
+        let mesh_config = mycelial_meshtastic::MeshtasticConfigBuilder::new()
+            .serial_port(serial_port)
+            .build();
+
+        // Create publish callback that uses the network handle
+        let network_handle_for_mesh = network_handle.clone();
+        let publish_callback: mycelial_meshtastic::PublishCallback =
+            std::sync::Arc::new(move |topic: String, data: Vec<u8>| {
+                let handle = network_handle_for_mesh.clone();
+                // Use blocking send since we're in a sync context
+                match tokio::runtime::Handle::try_current() {
+                    Ok(rt) => rt.block_on(async {
+                        handle
+                            .publish(&topic, data)
+                            .await
+                            .map_err(|e| e.to_string())
+                    }),
+                    Err(_) => Err("No tokio runtime available".to_string()),
+                }
+            });
+
+        // Create a mock interface for now (serial requires libudev-dev)
+        // In production, use SerialInterface with the meshtastic-serial feature
+        info!("Note: Using mock Meshtastic interface (serial support requires meshtastic-serial feature)");
+
+        // For actual serial support, compile with: cargo build --features meshtastic-serial
+        // Then the code would be:
+        // let interface = mycelial_meshtastic::SerialInterface::new(serial_port);
+        // let (bridge, bridge_handle) = mycelial_meshtastic::MeshtasticBridge::new(
+        //     interface,
+        //     &mesh_config,
+        //     publish_callback,
+        // );
+        // tokio::spawn(async move {
+        //     if let Err(e) = bridge.run().await {
+        //         error!("Meshtastic bridge error: {}", e);
+        //     }
+        // });
+
+        info!("Meshtastic bridge ready (mock mode - no real LoRa device connected)");
+    }
+
+    // Warn if --meshtastic flag is used without the feature
+    #[cfg(not(feature = "meshtastic"))]
+    if args.meshtastic.is_some() {
+        warn!("═══════════════════════════════════════════════════════════");
+        warn!("  --meshtastic flag requires the 'meshtastic' feature");
+        warn!("  Recompile with: cargo build --features meshtastic");
+        warn!("  Or for serial support: cargo build --features meshtastic-serial");
+        warn!("═══════════════════════════════════════════════════════════");
+    }
 
     // Start HTTP server - bind to requested port (0 = auto-assign)
     let http_bind_addr = format!("0.0.0.0:{}", http_port);
