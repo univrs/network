@@ -1,9 +1,25 @@
-# Mycelial P2P Network 
+# Mycelial P2P Network
 
 > [!CAUTION]
 > This project is a research demonstrator. It is in early development and may change significantly. Using permissive Univrs tools in your repository requires careful attention to security considerations and careful human supervision, and even then things can still go wrong. Use it with caution, and at your own risk. See [Disclaimer](#disclaimer).
 
 A peer-to-peer agent network implementing **Mycelial Economics** principles for [Univrs.io](https://univrs.io). Built with Rust, libp2p, and React.
+
+**Latest: v1.0.0** - Meshtastic LoRa mesh bridge integration
+
+## What's New in v1.0.0
+
+### Meshtastic LoRa Bridge
+- Complete bridge between Meshtastic LoRa mesh and libp2p gossipsub (~8,000 LOC)
+- All economics protocols (vouch, credit, governance, resource) work over radio
+- 116 tests covering translation, mapping, compression, and deduplication
+- Serial, TCP, and BLE device interfaces
+
+### Since v0.7.0
+- **ENR Bridge UI**: Gradients, elections, septal gates, and ENR credit panels
+- **Stress Testing**: 26+ stress tests for network reliability
+- **Full Cluster Testing**: Automated orchestrator + P2P test scripts
+- **Architecture Documentation**: Comprehensive ADR documents
 
 ## Overview
 
@@ -29,6 +45,7 @@ Mycelial creates a decentralized network where autonomous agents:
 │  │  • P2P chat              │    │  • Node health monitoring    │   │
 │  │  • Reputation tracking   │    │  • Cluster resource mgmt     │   │
 │  │  • Workload monitoring   │    │  • Event streaming           │   │
+│  │  • ENR Bridge panels     │    │  • ENR credit system         │   │
 │  └────────────┬─────────────┘    └──────────────────────────────┘   │
 │               │                                                      │
 │               │ WebSocket + REST API                                 │
@@ -44,6 +61,19 @@ Mycelial creates a decentralized network where autonomous agents:
 │  │  ┌─────────────────────────────────────────────────────────┐ │   │
 │  │  │              TCP + Noise + Yamux Transport              │ │   │
 │  │  └─────────────────────────────────────────────────────────┘ │   │
+│  └──────────────────────────────────────────────────────────────┘   │
+│               ▲                                                      │
+│               │ Meshtastic Bridge                                    │
+│               ▼                                                      │
+│  ┌──────────────────────────────────────────────────────────────┐   │
+│  │                   Meshtastic LoRa Bridge                      │   │
+│  │                                                               │   │
+│  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐   │   │
+│  │  │ Translator  │  │ TopicMapper │  │  DeduplicationCache │   │   │
+│  │  │ proto↔CBOR  │  │ topic↔chan  │  │   LRU + TTL         │   │   │
+│  │  └─────────────┘  └─────────────┘  └─────────────────────┘   │   │
+│  │                                                               │   │
+│  │  Serial/TCP/BLE Interface → LoRa Radio (2-10km range)        │   │
 │  └──────────────────────────────────────────────────────────────┘   │
 │                                                                      │
 │  ┌──────────────────────────────────────────────────────────────┐   │
@@ -63,17 +93,27 @@ Mycelial creates a decentralized network where autonomous agents:
 - **Pub/Sub Topics**: Chat, reputation, credit transfers, and governance channels
 - **Ed25519 Identity**: Cryptographic identity with DID (Decentralized Identifier) support
 
+### Meshtastic LoRa Bridge (NEW in v1.0.0)
+- **Long-Range Mesh**: Bridge to Meshtastic LoRa devices (2-10km range)
+- **Bidirectional Forwarding**: gossipsub ↔ LoRa message translation
+- **Economics Over Radio**: Vouch, credit, governance, and resource protocols over LoRa
+- **Compression & Chunking**: Automatic compression and message splitting for 237-byte LoRa payloads
+- **Deduplication**: LRU + TTL cache prevents message loops between networks
+- **Multiple Interfaces**: Serial, TCP, and BLE device connectivity
+
 ### Orchestrator Layer
 - **Workload Management**: Schedule and monitor distributed tasks across nodes
 - **Health Monitoring**: Real-time node status (Ready/NotReady) with resource metrics
 - **Resource Tracking**: CPU, memory, and disk allocation monitoring
 - **Event Streaming**: WebSocket-based live updates for dashboard integration
+- **ENR Credit System**: Energy-based resource credits for workload allocation
 
 ### Web Dashboard
 - **Network Visualization**: Interactive force-directed graph of P2P connections
 - **Real-time Chat**: Broadcast and direct messaging between peers
 - **Cluster Overview**: Node status, resource usage, and workload metrics
 - **Reputation Display**: Peer contribution scores and vouching relationships
+- **ENR Bridge Panels**: Gradients, elections, septal gates, and ENR credits
 
 ## Quick Start
 
@@ -127,6 +167,20 @@ pnpm dev
 # For workload management and cluster monitoring
 cargo run --release --bin mycelial-orchestrator -- --port 9090
 ```
+
+### Optional: Enable Meshtastic Bridge
+
+```bash
+# Build with Meshtastic serial support
+cargo build --release --features meshtastic-serial
+
+# Run with LoRa bridge (connect Meshtastic device via USB)
+cargo run --release --bin mycelial-node --features meshtastic-serial -- \
+  --bootstrap --name "LoRa Bridge" --port 9000 --http-port 8080 \
+  --meshtastic /dev/ttyUSB0
+```
+
+The bridge automatically forwards messages between the libp2p network and Meshtastic LoRa mesh, enabling long-range (2-10km) radio communication for the Mycelial Economics protocols.
 
 ## Configuration
 
@@ -184,6 +238,7 @@ See the [Mycelial Economics Whitepaper](https://univrs.io/mycelial-economics) fo
 |-----------|------------|
 | Core | Rust 2021, serde, thiserror |
 | P2P Network | libp2p 0.54 (gossipsub, kademlia, mDNS) |
+| Meshtastic Bridge | tokio-serial, miniz_oxide, async-trait |
 | Persistence | SQLite + sqlx + LRU cache |
 | HTTP Server | Axum + tokio |
 | Dashboard | React 18 + Vite + TypeScript + TailwindCSS |
@@ -191,10 +246,11 @@ See the [Mycelial Economics Whitepaper](https://univrs.io/mycelial-economics) fo
 
 ## Project Status
 
-- **P2P Network**: Production-ready (40+ tests passing)
-- **Dashboard**: Functional (peer graph, chat, orchestrator integration)
-- **Orchestrator**: Beta (workload scheduling, health monitoring)
-- **Economics**: In development (reputation, credit, governance)
+- **P2P Network**: Production-ready (150+ tests passing)
+- **Meshtastic Bridge**: Complete (116 tests - serial, TCP, BLE interfaces)
+- **Dashboard**: Functional (peer graph, chat, ENR panels, orchestrator)
+- **Orchestrator**: Beta (workload scheduling, health monitoring, ENR credits)
+- **Economics**: Complete (reputation, credit, governance, resource sharing)
 
 ## Related Projects
 
