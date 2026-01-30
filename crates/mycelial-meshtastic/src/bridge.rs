@@ -628,6 +628,7 @@ pub struct MockInterface {
 
 #[cfg(test)]
 impl MockInterface {
+    /// Create a new mock interface for testing.
     pub fn new() -> Self {
         Self {
             connected: false,
@@ -636,6 +637,7 @@ impl MockInterface {
         }
     }
 
+    /// Add incoming data to simulate receiving from device.
     pub fn add_incoming(&mut self, data: Vec<u8>) {
         self.incoming.push(data);
     }
@@ -874,7 +876,7 @@ mod tests {
         packet_data.extend_from_slice(&0x12345678u32.to_be_bytes()); // from
         packet_data.extend_from_slice(&0xFFFFFFFFu32.to_be_bytes()); // to (broadcast)
         packet_data.extend_from_slice(&0x00000001u32.to_be_bytes()); // packet_id
-        packet_data.push(MeshtasticPort::MycelialVouch as u8); // vouch port
+        packet_data.extend_from_slice(&(MeshtasticPort::MycelialVouch as u32).to_be_bytes()); // vouch port
         packet_data.extend_from_slice(b"vouch_payload"); // payload
 
         let result = bridge.handle_lora_packet(&packet_data).await;
