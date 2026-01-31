@@ -1,9 +1,25 @@
-# Mycelial P2P Network 
+# Mycelial P2P Network
 
 > [!CAUTION]
 > This project is a research demonstrator. It is in early development and may change significantly. Using permissive Univrs tools in your repository requires careful attention to security considerations and careful human supervision, and even then things can still go wrong. Use it with caution, and at your own risk. See [Disclaimer](#disclaimer).
 
 A peer-to-peer agent network implementing **Mycelial Economics** principles for [Univrs.io](https://univrs.io). Built with Rust, libp2p, and React.
+
+**Latest: v0.8.0** - Meshtastic LoRa mesh bridge integration
+
+## What's New in v0.8.0
+
+### Meshtastic LoRa Bridge
+- Complete bridge between Meshtastic LoRa mesh and libp2p gossipsub (~8,000 LOC)
+- All economics protocols (vouch, credit, governance, resource) work over radio
+- 116 tests covering translation, mapping, compression, and deduplication
+- Serial, TCP, and BLE device interfaces
+
+### Since v0.7.0
+- **ENR Bridge UI**: Gradients, elections, septal gates, and ENR credit panels
+- **Stress Testing**: 26+ stress tests for network reliability
+- **Full Cluster Testing**: Automated orchestrator + P2P test scripts
+- **Architecture Documentation**: Comprehensive ADR documents
 
 ## Overview
 
@@ -29,6 +45,7 @@ Mycelial creates a decentralized network where autonomous agents:
 │  │  • P2P chat              │    │  • Node health monitoring    │   │
 │  │  • Reputation tracking   │    │  • Cluster resource mgmt     │   │
 │  │  • Workload monitoring   │    │  • Event streaming           │   │
+│  │  • ENR Bridge panels     │    │  • ENR credit system         │   │
 │  └────────────┬─────────────┘    └──────────────────────────────┘   │
 │               │                                                      │
 │               │ WebSocket + REST API                                 │
@@ -44,6 +61,19 @@ Mycelial creates a decentralized network where autonomous agents:
 │  │  ┌─────────────────────────────────────────────────────────┐ │   │
 │  │  │              TCP + Noise + Yamux Transport              │ │   │
 │  │  └─────────────────────────────────────────────────────────┘ │   │
+│  └──────────────────────────────────────────────────────────────┘   │
+│               ▲                                                      │
+│               │ Meshtastic Bridge                                    │
+│               ▼                                                      │
+│  ┌──────────────────────────────────────────────────────────────┐   │
+│  │                   Meshtastic LoRa Bridge                      │   │
+│  │                                                               │   │
+│  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐   │   │
+│  │  │ Translator  │  │ TopicMapper │  │  DeduplicationCache │   │   │
+│  │  │ proto↔CBOR  │  │ topic↔chan  │  │   LRU + TTL         │   │   │
+│  │  └─────────────┘  └─────────────┘  └─────────────────────┘   │   │
+│  │                                                               │   │
+│  │  Serial/TCP/BLE Interface → LoRa Radio (2-10km range)        │   │
 │  └──────────────────────────────────────────────────────────────┘   │
 │                                                                      │
 │  ┌──────────────────────────────────────────────────────────────┐   │
@@ -63,17 +93,27 @@ Mycelial creates a decentralized network where autonomous agents:
 - **Pub/Sub Topics**: Chat, reputation, credit transfers, and governance channels
 - **Ed25519 Identity**: Cryptographic identity with DID (Decentralized Identifier) support
 
+### Meshtastic LoRa Bridge (NEW in v1.0.0)
+- **Long-Range Mesh**: Bridge to Meshtastic LoRa devices (2-10km range)
+- **Bidirectional Forwarding**: gossipsub ↔ LoRa message translation
+- **Economics Over Radio**: Vouch, credit, governance, and resource protocols over LoRa
+- **Compression & Chunking**: Automatic compression and message splitting for 237-byte LoRa payloads
+- **Deduplication**: LRU + TTL cache prevents message loops between networks
+- **Multiple Interfaces**: Serial, TCP, and BLE device connectivity
+
 ### Orchestrator Layer
 - **Workload Management**: Schedule and monitor distributed tasks across nodes
 - **Health Monitoring**: Real-time node status (Ready/NotReady) with resource metrics
 - **Resource Tracking**: CPU, memory, and disk allocation monitoring
 - **Event Streaming**: WebSocket-based live updates for dashboard integration
+- **ENR Credit System**: Energy-based resource credits for workload allocation
 
 ### Web Dashboard
 - **Network Visualization**: Interactive force-directed graph of P2P connections
 - **Real-time Chat**: Broadcast and direct messaging between peers
 - **Cluster Overview**: Node status, resource usage, and workload metrics
 - **Reputation Display**: Peer contribution scores and vouching relationships
+- **ENR Bridge Panels**: Gradients, elections, septal gates, and ENR credits
 
 ## Quick Start
 
@@ -127,6 +167,143 @@ pnpm dev
 # For workload management and cluster monitoring
 cargo run --release --bin mycelial-orchestrator -- --port 9090
 ```
+
+### Optional: Enable Meshtastic Bridge
+
+#### Hardware Requirements
+
+- **Meshtastic Device**: Any supported device (T-Beam, T-Echo, Heltec, RAK, etc.)
+- **LoRa Frequency**: Must match your region (e.g., 915MHz US, 868MHz EU, 433MHz Asia)
+- **Firmware**: Meshtastic firmware 2.0+ recommended
+- **Connection**: USB serial, TCP network, or Bluetooth LE
+
+#### System Dependencies (Linux)
+
+For serial port access:
+```bash
+# Ubuntu/Debian
+sudo apt install libudev-dev pkg-config
+
+# Add user to dialout group for serial port access
+sudo usermod -a -G dialout $USER
+# Log out and back in for group changes to take effect
+```
+
+#### Build with Meshtastic Support
+
+```bash
+# Serial interface (USB connection)
+cargo build --release --features meshtastic-serial
+
+# TCP interface (network-connected devices)
+cargo build --release --features meshtastic-tcp
+
+# BLE interface (Bluetooth Low Energy)
+cargo build --release --features meshtastic-ble
+
+# All interfaces
+cargo build --release --features meshtastic-full
+```
+
+#### Run with LoRa Bridge
+
+**Serial (USB):**
+```bash
+cargo run --release --bin mycelial-node --features meshtastic-serial -- \
+  --bootstrap --name "LoRa Bridge" --port 9000 --http-port 8080 \
+  --meshtastic /dev/ttyUSB0
+```
+
+**TCP (Network-connected device):**
+```bash
+cargo run --release --bin mycelial-node --features meshtastic-tcp -- \
+  --bootstrap --name "LoRa Bridge" --port 9000 --http-port 8080 \
+  --meshtastic tcp://192.168.1.100:4403
+```
+
+**BLE (Bluetooth):**
+```bash
+cargo run --release --bin mycelial-node --features meshtastic-ble -- \
+  --bootstrap --name "LoRa Bridge" --port 9000 --http-port 8080 \
+  --meshtastic ble://MyMeshtastic
+```
+
+#### Meshtastic Device Configuration
+
+Configure your Meshtastic device for optimal bridge performance:
+
+```bash
+# Using Meshtastic Python CLI
+pip install meshtastic
+
+# Set device name
+meshtastic --set lora.region US
+
+# Enable serial output
+meshtastic --set serial.enabled true
+meshtastic --set serial.echo true
+
+# Increase hop limit for mesh
+meshtastic --set lora.hop_limit 7
+
+# Optional: Increase transmit power (check local regulations)
+meshtastic --set lora.tx_power 20
+```
+
+Or via the Meshtastic mobile app: Settings → Radio Configuration → LoRa → Set region and hop limit.
+
+#### What Gets Bridged
+
+The bridge automatically translates and forwards:
+
+- **Chat Messages**: `/chat` gossipsub ↔ Meshtastic TEXT_MESSAGE_APP
+- **Reputation/Vouches**: `/reputation` ↔ PRIVATE_APP (channel 1)
+- **Credit Transfers**: `/credit` ↔ PRIVATE_APP (channel 2)
+- **Governance Proposals**: `/governance` ↔ PRIVATE_APP (channel 3)
+- **Resource Sharing**: `/resources` ↔ PRIVATE_APP (channel 4)
+
+Messages are automatically:
+- **Compressed** using miniz_oxide (typically 60-80% size reduction)
+- **Chunked** if needed (>237 bytes split across multiple LoRa packets)
+- **Deduplicated** via LRU cache to prevent loops
+- **Mapped** between libp2p PeerIds and Meshtastic node IDs
+
+#### Range & Performance
+
+- **Urban**: 500m - 2km (buildings, obstacles)
+- **Suburban**: 2km - 5km (moderate line-of-sight)
+- **Rural/Open**: 5km - 10km+ (clear line-of-sight)
+- **Mountain/Hilltop**: 20km+ possible with elevated nodes
+
+**Latency**: 1-5 seconds typical (LoRa airtime + mesh hops)  
+**Throughput**: ~1-3 messages/second (depends on spreading factor and congestion)
+
+#### Troubleshooting
+
+**Device not detected:**
+```bash
+# List serial ports
+ls -la /dev/tty* | grep USB
+
+# Check permissions
+groups  # Should include 'dialout'
+
+# Test with Meshtastic CLI
+meshtastic --info
+```
+
+**No messages forwarding:**
+- Verify device is on the same Meshtastic channel/region
+- Check bridge logs for translation errors: `RUST_LOG=mycelial_meshtastic=debug`
+- Ensure hop_limit > 0 on device for mesh routing
+- Verify libp2p node is publishing to the correct topics
+
+**High message loss:**
+- Reduce transmit frequency (LoRa channels have duty cycle limits)
+- Increase spreading factor for better range at cost of speed
+- Check for local interference on your LoRa frequency
+
+The bridge automatically forwards messages between the libp2p network and Meshtastic LoRa mesh, enabling long-range (2-10km) radio communication for the Mycelial Economics protocols.
 
 ## Configuration
 
@@ -184,6 +361,7 @@ See the [Mycelial Economics Whitepaper](https://univrs.io/mycelial-economics) fo
 |-----------|------------|
 | Core | Rust 2021, serde, thiserror |
 | P2P Network | libp2p 0.54 (gossipsub, kademlia, mDNS) |
+| Meshtastic Bridge | tokio-serial, miniz_oxide, async-trait |
 | Persistence | SQLite + sqlx + LRU cache |
 | HTTP Server | Axum + tokio |
 | Dashboard | React 18 + Vite + TypeScript + TailwindCSS |
@@ -191,10 +369,11 @@ See the [Mycelial Economics Whitepaper](https://univrs.io/mycelial-economics) fo
 
 ## Project Status
 
-- **P2P Network**: Production-ready (40+ tests passing)
-- **Dashboard**: Functional (peer graph, chat, orchestrator integration)
-- **Orchestrator**: Beta (workload scheduling, health monitoring)
-- **Economics**: In development (reputation, credit, governance)
+- **P2P Network**: Production-ready (150+ tests passing)
+- **Meshtastic Bridge**: Complete (116 tests - serial, TCP, BLE interfaces)
+- **Dashboard**: Functional (peer graph, chat, ENR panels, orchestrator)
+- **Orchestrator**: Beta (workload scheduling, health monitoring, ENR credits)
+- **Economics**: Complete (reputation, credit, governance, resource sharing)
 
 ## Related Projects
 
