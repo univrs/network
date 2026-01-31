@@ -5,9 +5,9 @@
 
 A peer-to-peer agent network implementing **Mycelial Economics** principles for [Univrs.io](https://univrs.io). Built with Rust, libp2p, and React.
 
-**Latest: v1.0.0** - Meshtastic LoRa mesh bridge integration
+**Latest: v0.8.0** - Meshtastic LoRa mesh bridge integration
 
-## What's New in v1.0.0
+## What's New in v0.8.0
 
 ### Meshtastic LoRa Bridge
 - Complete bridge between Meshtastic LoRa mesh and libp2p gossipsub (~8,000 LOC)
@@ -170,15 +170,138 @@ cargo run --release --bin mycelial-orchestrator -- --port 9090
 
 ### Optional: Enable Meshtastic Bridge
 
+#### Hardware Requirements
+
+- **Meshtastic Device**: Any supported device (T-Beam, T-Echo, Heltec, RAK, etc.)
+- **LoRa Frequency**: Must match your region (e.g., 915MHz US, 868MHz EU, 433MHz Asia)
+- **Firmware**: Meshtastic firmware 2.0+ recommended
+- **Connection**: USB serial, TCP network, or Bluetooth LE
+
+#### System Dependencies (Linux)
+
+For serial port access:
 ```bash
-# Build with Meshtastic serial support
+# Ubuntu/Debian
+sudo apt install libudev-dev pkg-config
+
+# Add user to dialout group for serial port access
+sudo usermod -a -G dialout $USER
+# Log out and back in for group changes to take effect
+```
+
+#### Build with Meshtastic Support
+
+```bash
+# Serial interface (USB connection)
 cargo build --release --features meshtastic-serial
 
-# Run with LoRa bridge (connect Meshtastic device via USB)
+# TCP interface (network-connected devices)
+cargo build --release --features meshtastic-tcp
+
+# BLE interface (Bluetooth Low Energy)
+cargo build --release --features meshtastic-ble
+
+# All interfaces
+cargo build --release --features meshtastic-full
+```
+
+#### Run with LoRa Bridge
+
+**Serial (USB):**
+```bash
 cargo run --release --bin mycelial-node --features meshtastic-serial -- \
   --bootstrap --name "LoRa Bridge" --port 9000 --http-port 8080 \
   --meshtastic /dev/ttyUSB0
 ```
+
+**TCP (Network-connected device):**
+```bash
+cargo run --release --bin mycelial-node --features meshtastic-tcp -- \
+  --bootstrap --name "LoRa Bridge" --port 9000 --http-port 8080 \
+  --meshtastic tcp://192.168.1.100:4403
+```
+
+**BLE (Bluetooth):**
+```bash
+cargo run --release --bin mycelial-node --features meshtastic-ble -- \
+  --bootstrap --name "LoRa Bridge" --port 9000 --http-port 8080 \
+  --meshtastic ble://MyMeshtastic
+```
+
+#### Meshtastic Device Configuration
+
+Configure your Meshtastic device for optimal bridge performance:
+
+```bash
+# Using Meshtastic Python CLI
+pip install meshtastic
+
+# Set device name
+meshtastic --set lora.region US
+
+# Enable serial output
+meshtastic --set serial.enabled true
+meshtastic --set serial.echo true
+
+# Increase hop limit for mesh
+meshtastic --set lora.hop_limit 7
+
+# Optional: Increase transmit power (check local regulations)
+meshtastic --set lora.tx_power 20
+```
+
+Or via the Meshtastic mobile app: Settings → Radio Configuration → LoRa → Set region and hop limit.
+
+#### What Gets Bridged
+
+The bridge automatically translates and forwards:
+
+- **Chat Messages**: `/chat` gossipsub ↔ Meshtastic TEXT_MESSAGE_APP
+- **Reputation/Vouches**: `/reputation` ↔ PRIVATE_APP (channel 1)
+- **Credit Transfers**: `/credit` ↔ PRIVATE_APP (channel 2)
+- **Governance Proposals**: `/governance` ↔ PRIVATE_APP (channel 3)
+- **Resource Sharing**: `/resources` ↔ PRIVATE_APP (channel 4)
+
+Messages are automatically:
+- **Compressed** using miniz_oxide (typically 60-80% size reduction)
+- **Chunked** if needed (>237 bytes split across multiple LoRa packets)
+- **Deduplicated** via LRU cache to prevent loops
+- **Mapped** between libp2p PeerIds and Meshtastic node IDs
+
+#### Range & Performance
+
+- **Urban**: 500m - 2km (buildings, obstacles)
+- **Suburban**: 2km - 5km (moderate line-of-sight)
+- **Rural/Open**: 5km - 10km+ (clear line-of-sight)
+- **Mountain/Hilltop**: 20km+ possible with elevated nodes
+
+**Latency**: 1-5 seconds typical (LoRa airtime + mesh hops)  
+**Throughput**: ~1-3 messages/second (depends on spreading factor and congestion)
+
+#### Troubleshooting
+
+**Device not detected:**
+```bash
+# List serial ports
+ls -la /dev/tty* | grep USB
+
+# Check permissions
+groups  # Should include 'dialout'
+
+# Test with Meshtastic CLI
+meshtastic --info
+```
+
+**No messages forwarding:**
+- Verify device is on the same Meshtastic channel/region
+- Check bridge logs for translation errors: `RUST_LOG=mycelial_meshtastic=debug`
+- Ensure hop_limit > 0 on device for mesh routing
+- Verify libp2p node is publishing to the correct topics
+
+**High message loss:**
+- Reduce transmit frequency (LoRa channels have duty cycle limits)
+- Increase spreading factor for better range at cost of speed
+- Check for local interference on your LoRa frequency
 
 The bridge automatically forwards messages between the libp2p network and Meshtastic LoRa mesh, enabling long-range (2-10km) radio communication for the Mycelial Economics protocols.
 
