@@ -32,6 +32,7 @@ on:
           - oracle
           - azure
           - aws
+          - hetzner
           - images-only
 
 env:
@@ -259,12 +260,56 @@ jobs:
             echo "AWS deployment successful!"
 
   # ============================================
+  # Deploy to Hetzner (EU Peer Node)
+  # ============================================
+  deploy-hetzner:
+    name: Deploy to Hetzner (EU Peer)
+    runs-on: ubuntu-latest
+    needs: [build-images, deploy-oracle]
+    if: |
+      github.event_name == 'push' ||
+      github.event.inputs.deploy_target == 'all' ||
+      github.event.inputs.deploy_target == 'hetzner'
+    environment:
+      name: hetzner-production
+    steps:
+      - name: Deploy to Hetzner VPS
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.HETZNER_HOST }}
+          username: ${{ secrets.HETZNER_USER }}
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          script: |
+            # Pull latest image
+            docker pull ${{ env.NODE_IMAGE }}:latest
+
+            # Stop existing container
+            docker stop mycelial-peer 2>/dev/null || true
+            docker rm mycelial-peer 2>/dev/null || true
+
+            # Start EU peer node connecting to Oracle bootstrap
+            docker run -d \
+              --name mycelial-peer \
+              --restart unless-stopped \
+              -p 8080:8080 \
+              -p 9000:9000 \
+              -v mycelial-data:/app/data \
+              ${{ env.NODE_IMAGE }}:latest \
+              --name "HetznerEU" --connect "/ip4/${{ secrets.ORACLE_HOST }}/tcp/9000"
+
+            # Wait for health check
+            sleep 5
+            curl -f http://localhost:8080/health || exit 1
+
+            echo "Hetzner EU deployment successful!"
+
+  # ============================================
   # Post-Deployment Verification
   # ============================================
   verify-deployment:
     name: Verify P2P Network
     runs-on: ubuntu-latest
-    needs: [deploy-oracle, deploy-azure, deploy-aws]
+    needs: [deploy-oracle, deploy-azure, deploy-aws, deploy-hetzner]
     if: |
       always() &&
       (needs.deploy-oracle.result == 'success') &&
@@ -279,16 +324,17 @@ jobs:
         run: |
           PEERS=$(curl -s http://${{ secrets.ORACLE_HOST }}:8080/api/peers | jq length)
           echo "Connected peers: $PEERS"
-          if [ "$PEERS" -lt 2 ]; then
-            echo "Warning: Expected at least 2 peers, found $PEERS"
+          if [ "$PEERS" -lt 3 ]; then
+            echo "Warning: Expected at least 3 peers, found $PEERS"
           fi
 
       - name: Deployment Summary
         run: |
           echo "## Deployment Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Node | URL | Status |" >> $GITHUB_STEP_SUMMARY
-          echo "|------|-----|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Oracle Bootstrap | http://${{ secrets.ORACLE_HOST }} | ${{ needs.deploy-oracle.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Azure Peer | http://${{ secrets.AZURE_HOST }}:8080 | ${{ needs.deploy-azure.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| AWS Peer | http://${{ secrets.AWS_HOST }}:8080 | ${{ needs.deploy-aws.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Node | Region | URL | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|--------|-----|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Oracle Bootstrap | US | http://${{ secrets.ORACLE_HOST }} | ${{ needs.deploy-oracle.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Azure Peer | US | http://${{ secrets.AZURE_HOST }}:8080 | ${{ needs.deploy-azure.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| AWS Peer | US | http://${{ secrets.AWS_HOST }}:8080 | ${{ needs.deploy-aws.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Hetzner EU Peer | EU | http://${{ secrets.HETZNER_HOST }}:8080 | ${{ needs.deploy-hetzner.result }} |" >> $GITHUB_STEP_SUMMARY

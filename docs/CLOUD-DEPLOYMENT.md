@@ -5,30 +5,31 @@
 ## Overview
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                     MYCELIAL MULTI-CLOUD TOPOLOGY                           │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│   ┌─────────────┐     ┌─────────────┐     ┌─────────────┐                  │
-│   │   ORACLE    │     │    AZURE    │     │     AWS     │                  │
-│   │  (Primary)  │     │ (Secondary) │     │ (Tertiary)  │                  │
-│   │             │     │             │     │             │                  │
-│   │ ┌─────────┐ │     │ ┌─────────┐ │     │ ┌─────────┐ │                  │
-│   │ │Bootstrap│ │◄───►│ │  Peer   │ │◄───►│ │  Peer   │ │                  │
-│   │ │  Node   │ │     │ │  Node   │ │     │ │  Node   │ │                  │
-│   │ └────┬────┘ │     │ └─────────┘ │     │ └─────────┘ │                  │
-│   │      │      │     │             │     │             │                  │
-│   │ ┌────▼────┐ │     │             │     │             │                  │
-│   │ │Dashboard│ │     │             │     │             │                  │
-│   │ │  (Web)  │ │     │             │     │             │                  │
-│   │ └─────────┘ │     │             │     │             │                  │
-│   └─────────────┘     └─────────────┘     └─────────────┘                  │
-│                                                                             │
-│   Ports:                                                                    │
-│   • 8080 - HTTP/WebSocket (Dashboard API)                                   │
-│   • 9000 - P2P TCP (libp2p)                                                 │
-│   • 80/443 - Dashboard Web UI                                               │
-└─────────────────────────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────────────────────────────┐
+│                         MYCELIAL MULTI-CLOUD TOPOLOGY                                 │
+├───────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                       │
+│   ┌─────────────┐     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐        │
+│   │   ORACLE    │     │    AZURE    │     │     AWS     │     │   HETZNER   │        │
+│   │  (Primary)  │     │  (US Peer)  │     │  (US Peer)  │     │  (EU Peer)  │        │
+│   │             │     │             │     │             │     │  🇩🇪 / 🇫🇮    │        │
+│   │ ┌─────────┐ │     │ ┌─────────┐ │     │ ┌─────────┐ │     │ ┌─────────┐ │        │
+│   │ │Bootstrap│ │◄───►│ │  Peer   │ │◄───►│ │  Peer   │ │◄───►│ │EU Peer  │ │        │
+│   │ │  Node   │ │     │ │  Node   │ │     │ │  Node   │ │     │ │  Node   │ │        │
+│   │ └────┬────┘ │     │ └─────────┘ │     │ └─────────┘ │     │ └─────────┘ │        │
+│   │      │      │     │             │     │             │     │             │        │
+│   │ ┌────▼────┐ │     │             │     │             │     │             │        │
+│   │ │Dashboard│ │     │             │     │             │     │             │        │
+│   │ │  (Web)  │ │     │             │     │             │     │             │        │
+│   │ └─────────┘ │     │             │     │             │     │             │        │
+│   └─────────────┘     └─────────────┘     └─────────────┘     └─────────────┘        │
+│                                                                                       │
+│   Ports:                              Locations:                                      │
+│   • 8080 - HTTP/WebSocket API         • Oracle: US (Free Tier)                        │
+│   • 9000 - P2P TCP (libp2p)           • Azure: US (Free Tier)                         │
+│   • 80/443 - Dashboard Web UI         • AWS: US (Free Tier)                           │
+│                                       • Hetzner: Falkenstein DE / Helsinki FI         │
+└───────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ## Cloud Provider Selection
@@ -47,6 +48,12 @@
 - **Instance**: t2.micro (1 vCPU, 1GB RAM - 750 hours/month free for 12 months)
 - **Role**: Additional peer for 3-node network validation
 - **Why**: Most common cloud, reliable networking
+
+### Hetzner Cloud - EU Peer
+- **Instance**: CX22 (2 vCPU, 4GB RAM - €4.75/month)
+- **Location**: Falkenstein (DE) or Helsinki (FI)
+- **Role**: EU peer node for geographic distribution + GDPR-friendly data path
+- **Why**: Excellent EU coverage, blazing fast network, dirt cheap
 
 ## Deployment Strategy
 
@@ -137,6 +144,65 @@ docker run -d \
   --name "AzurePeer" --connect "/ip4/ORACLE_PUBLIC_IP/tcp/9000"
 ```
 
+### Hetzner EU Peer (Manual Bootstrap)
+
+**1. Create the VPS via Hetzner Cloud Console:**
+- Go to https://console.hetzner.cloud
+- Create new project (or use existing)
+- Add Server → Location: **Falkenstein** or **Helsinki**
+- Type: **CX22** (2 vCPU, 4GB RAM, 40GB SSD)
+- Image: **Ubuntu 24.04**
+- SSH Key: Add your public key
+- Firewall: Create/assign (see ports below)
+- Create Server → Note the public IP
+
+**2. Configure Firewall (Hetzner Console or CLI):**
+```
+Inbound Rules:
+- TCP 22    → Your IP only (SSH)
+- TCP 80    → 0.0.0.0/0 (HTTP, optional)
+- TCP 8080  → 0.0.0.0/0 (P2P API)
+- TCP 9000  → 0.0.0.0/0 (libp2p)
+```
+
+**3. SSH in and install Docker:**
+```bash
+ssh root@HETZNER_IP
+
+# Install Docker
+curl -fsSL https://get.docker.com | sh
+systemctl enable docker
+systemctl start docker
+
+# Verify
+docker --version
+```
+
+**4. Deploy the peer node:**
+```bash
+# Pull and run EU peer node
+docker pull ghcr.io/univrs/mycelial-node:latest
+docker run -d \
+  --name mycelial-peer \
+  --restart unless-stopped \
+  -p 8080:8080 \
+  -p 9000:9000 \
+  -v mycelial-data:/app/data \
+  ghcr.io/univrs/mycelial-node:latest \
+  --name "HetznerEU" --connect "/ip4/ORACLE_PUBLIC_IP/tcp/9000"
+
+# Verify health
+sleep 5
+curl http://localhost:8080/health
+```
+
+**5. Add GitHub Secrets for CD automation:**
+```
+HETZNER_HOST     → The VPS public IP
+HETZNER_USER     → root
+HETZNER_SSH_KEY  → Your private SSH key (the one matching the public key you added)
+```
+
 ## GitHub Actions CD Workflow
 
 The CD workflow (`.github/workflows/cd.yml`) handles:
@@ -169,10 +235,16 @@ Add these secrets to GitHub repository settings:
 | `GHCR_TOKEN` | GitHub token for container registry |
 | `ORACLE_SSH_KEY` | SSH private key for Oracle VM |
 | `ORACLE_HOST` | Oracle VM public IP |
+| `ORACLE_USER` | SSH user for Oracle (usually `ubuntu` or `opc`) |
 | `AZURE_SSH_KEY` | SSH private key for Azure VM |
 | `AZURE_HOST` | Azure VM public IP |
+| `AZURE_USER` | SSH user for Azure (usually `azureuser`) |
 | `AWS_SSH_KEY` | SSH private key for AWS EC2 |
 | `AWS_HOST` | AWS EC2 public IP |
+| `AWS_USER` | SSH user for AWS (usually `ubuntu` or `ec2-user`) |
+| `HETZNER_SSH_KEY` | SSH private key for Hetzner VPS |
+| `HETZNER_HOST` | Hetzner VPS public IP |
+| `HETZNER_USER` | SSH user for Hetzner (usually `root`) |
 
 ## Health Monitoring
 
@@ -181,6 +253,7 @@ Add these secrets to GitHub repository settings:
 - Dashboard: `http://ORACLE_IP/health`
 - Azure Peer: `http://AZURE_IP:8080/health`
 - AWS Peer: `http://AWS_IP:8080/health`
+- Hetzner EU Peer: `http://HETZNER_IP:8080/health`
 
 ### P2P Network Status
 Access the dashboard at `http://ORACLE_IP` to view:
@@ -206,7 +279,8 @@ docker run -d --name mycelial-node \
 | Oracle | A1.Flex | $0 | Always Free (ARM) |
 | Azure | B1s | $0* | 750 hrs/month (12 months) |
 | AWS | t2.micro | $0* | 750 hrs/month (12 months) |
-| **Total** | | **$0** | *During free tier period |
+| Hetzner | CX22 | €4.75 (~$5) | 2 vCPU, 4GB RAM, EU location |
+| **Total** | | **~$5/mo** | *Azure/AWS free during tier period |
 
 ## Future Enhancements
 
