@@ -10,8 +10,8 @@
 ├───────────────────────────────────────────────────────────────────────────────────────┤
 │                                                                                       │
 │   ┌─────────────┐     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐        │
-│   │   ORACLE    │     │    AZURE    │     │     AWS     │     │   HETZNER   │        │
-│   │  (Primary)  │     │  (US Peer)  │     │  (US Peer)  │     │  (EU Peer)  │        │
+│   │     GCP     │     │     AWS     │     │    AZURE    │     │   HETZNER   │        │
+│   │ (Bootstrap) │     │  (US Peer)  │     │  (US Peer)  │     │  (EU Peer)  │        │
 │   │             │     │             │     │             │     │  🇩🇪 / 🇫🇮    │        │
 │   │ ┌─────────┐ │     │ ┌─────────┐ │     │ ┌─────────┐ │     │ ┌─────────┐ │        │
 │   │ │Bootstrap│ │◄───►│ │  Peer   │ │◄───►│ │  Peer   │ │◄───►│ │EU Peer  │ │        │
@@ -25,29 +25,30 @@
 │   └─────────────┘     └─────────────┘     └─────────────┘     └─────────────┘        │
 │                                                                                       │
 │   Ports:                              Locations:                                      │
-│   • 8080 - HTTP/WebSocket API         • Oracle: US (Free Tier)                        │
-│   • 9000 - P2P TCP (libp2p)           • Azure: US (Free Tier)                         │
-│   • 80/443 - Dashboard Web UI         • AWS: US (Free Tier)                           │
+│   • 8080 - HTTP/WebSocket API         • GCP: us-central1 (Free Tier)                  │
+│   • 9000 - P2P TCP (libp2p)           • AWS: us-east-1 (Free Tier)                    │
+│   • 80/443 - Dashboard Web UI         • Azure: eastus (Free Tier)                     │
 │                                       • Hetzner: Falkenstein DE / Helsinki FI         │
 └───────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ## Cloud Provider Selection
 
-### Oracle Cloud (Free Tier) - Primary Bootstrap
-- **Instance**: VM.Standard.A1.Flex (ARM, 4 OCPU, 24GB RAM - Always Free)
+### GCP (Free Tier) - Primary Bootstrap
+- **Instance**: e2-micro (2 vCPU shared, 1GB RAM - Always Free in select regions)
+- **Region**: us-central1, us-west1, or us-east1 (free tier eligible)
 - **Role**: Bootstrap node + Dashboard hosting
-- **Why Primary**: Best free tier resources, no time limit
+- **Why Primary**: Always Free tier (no 12-month limit), good global network
 
-### Azure (Free Tier) - Secondary Peer
-- **Instance**: B1s (1 vCPU, 1GB RAM - 750 hours/month free for 12 months)
-- **Role**: Peer node for cross-cloud discovery testing
-- **Why**: Good global presence, GitHub integration
-
-### AWS (Free Tier) - Tertiary Peer
+### AWS (Free Tier) - US Peer
 - **Instance**: t2.micro (1 vCPU, 1GB RAM - 750 hours/month free for 12 months)
-- **Role**: Additional peer for 3-node network validation
-- **Why**: Most common cloud, reliable networking
+- **Role**: Peer node for cross-cloud discovery testing
+- **Why**: Most common cloud, excellent documentation
+
+### Azure (Free Tier) - US Peer
+- **Instance**: B1s (1 vCPU, 1GB RAM - 750 hours/month free for 12 months)
+- **Role**: Additional peer for network validation
+- **Why**: Good GitHub integration, different network backbone
 
 ### Hetzner Cloud - EU Peer
 - **Instance**: CX22 (2 vCPU, 4GB RAM - €4.75/month)
@@ -64,21 +65,26 @@ ghcr.io/univrs/mycelial-node:latest
 ghcr.io/univrs/mycelial-dashboard:latest
 ```
 
-### Phase 2: Oracle Cloud Bootstrap
-1. Create ARM VM (Always Free tier)
+### Phase 2: GCP Bootstrap
+1. Create e2-micro VM (Always Free tier)
 2. Install Docker
 3. Deploy bootstrap node with public IP
 4. Deploy dashboard behind nginx proxy
 
-### Phase 3: Azure Peer Deployment
-1. Create B1s VM
-2. Install Docker
-3. Deploy peer node connecting to Oracle bootstrap
-
-### Phase 4: AWS Peer Deployment
+### Phase 3: AWS Peer Deployment
 1. Create t2.micro EC2 instance
 2. Install Docker
-3. Deploy peer node connecting to Oracle bootstrap
+3. Deploy peer node connecting to GCP bootstrap
+
+### Phase 4: Azure Peer Deployment
+1. Create B1s VM
+2. Install Docker
+3. Deploy peer node connecting to GCP bootstrap
+
+### Phase 5: Hetzner EU Peer Deployment
+1. Create CX22 VPS
+2. Install Docker
+3. Deploy peer node connecting to GCP bootstrap
 
 ## Network Configuration
 
@@ -104,9 +110,50 @@ ingress_rules = [
 ]
 ```
 
-## Deployment Commands
+## Manual Bootstrap Instructions
 
-### Bootstrap Node (Oracle)
+### GCP Bootstrap Node (Primary)
+
+**1. Create the VM via gcloud CLI:**
+```bash
+# Set project
+gcloud config set project YOUR_PROJECT_ID
+
+# Create firewall rules
+gcloud compute firewall-rules create mycelial-ports \
+  --allow tcp:22,tcp:80,tcp:443,tcp:8080,tcp:9000 \
+  --source-ranges 0.0.0.0/0 \
+  --description "Mycelial P2P ports"
+
+# Create e2-micro VM (Always Free in us-central1, us-west1, us-east1)
+gcloud compute instances create mycelial-bootstrap \
+  --zone=us-central1-a \
+  --machine-type=e2-micro \
+  --image-family=ubuntu-2404-lts-amd64 \
+  --image-project=ubuntu-os-cloud \
+  --boot-disk-size=30GB \
+  --tags=mycelial
+
+# Get external IP
+gcloud compute instances describe mycelial-bootstrap \
+  --zone=us-central1-a \
+  --format='get(networkInterfaces[0].accessConfigs[0].natIP)'
+```
+
+**2. SSH in and install Docker:**
+```bash
+gcloud compute ssh mycelial-bootstrap --zone=us-central1-a
+
+# Install Docker
+curl -fsSL https://get.docker.com | sh
+sudo usermod -aG docker $USER
+newgrp docker
+
+# Verify
+docker --version
+```
+
+**3. Deploy bootstrap node + dashboard:**
 ```bash
 # Pull and run bootstrap node
 docker pull ghcr.io/univrs/mycelial-node:latest
@@ -117,7 +164,7 @@ docker run -d \
   -p 9000:9000 \
   -v mycelial-data:/app/data \
   ghcr.io/univrs/mycelial-node:latest \
-  --bootstrap --name "OracleBootstrap" --port 9000 --http-port 8080
+  --bootstrap --name "GCPBootstrap" --port 9000 --http-port 8080
 
 # Pull and run dashboard
 docker pull ghcr.io/univrs/mycelial-dashboard:latest
@@ -125,15 +172,61 @@ docker run -d \
   --name mycelial-dashboard \
   --restart unless-stopped \
   -p 80:80 \
-  -e VITE_P2P_WS_URL=ws://ORACLE_PUBLIC_IP:8080/ws \
-  -e VITE_P2P_API_URL=http://ORACLE_PUBLIC_IP:8080 \
+  -e VITE_P2P_WS_URL=ws://GCP_PUBLIC_IP:8080/ws \
+  -e VITE_P2P_API_URL=http://GCP_PUBLIC_IP:8080 \
   ghcr.io/univrs/mycelial-dashboard:latest
+
+# Verify
+curl http://localhost:8080/health
+curl http://localhost/health
 ```
 
-### Peer Node (Azure/AWS)
+### AWS Peer Node
+
+**1. Create via AWS CLI:**
 ```bash
-# Pull and run peer node
-docker pull ghcr.io/univrs/mycelial-node:latest
+# Create security group
+aws ec2 create-security-group \
+  --group-name mycelial-sg \
+  --description "Mycelial P2P ports"
+
+aws ec2 authorize-security-group-ingress \
+  --group-name mycelial-sg \
+  --protocol tcp \
+  --port 22 \
+  --cidr YOUR_IP/32
+
+aws ec2 authorize-security-group-ingress \
+  --group-name mycelial-sg \
+  --protocol tcp \
+  --port 8080 \
+  --cidr 0.0.0.0/0
+
+aws ec2 authorize-security-group-ingress \
+  --group-name mycelial-sg \
+  --protocol tcp \
+  --port 9000 \
+  --cidr 0.0.0.0/0
+
+# Create t2.micro instance (Free tier)
+aws ec2 run-instances \
+  --image-id ami-0c7217cdde317cfec \
+  --instance-type t2.micro \
+  --key-name YOUR_KEY_NAME \
+  --security-groups mycelial-sg \
+  --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=mycelial-peer}]'
+```
+
+**2. SSH in and deploy:**
+```bash
+ssh -i your-key.pem ubuntu@AWS_PUBLIC_IP
+
+# Install Docker
+curl -fsSL https://get.docker.com | sh
+sudo usermod -aG docker $USER
+newgrp docker
+
+# Deploy peer
 docker run -d \
   --name mycelial-peer \
   --restart unless-stopped \
@@ -141,47 +234,94 @@ docker run -d \
   -p 9000:9000 \
   -v mycelial-data:/app/data \
   ghcr.io/univrs/mycelial-node:latest \
-  --name "AzurePeer" --connect "/ip4/ORACLE_PUBLIC_IP/tcp/9000"
+  --name "AWSPeer" --connect "/ip4/GCP_PUBLIC_IP/tcp/9000"
 ```
 
-### Hetzner EU Peer (Manual Bootstrap)
+### Azure Peer Node
 
-**1. Create the VPS via Hetzner Cloud Console:**
-- Go to https://console.hetzner.cloud
-- Create new project (or use existing)
-- Add Server → Location: **Falkenstein** or **Helsinki**
-- Type: **CX22** (2 vCPU, 4GB RAM, 40GB SSD)
-- Image: **Ubuntu 24.04**
-- SSH Key: Add your public key
-- Firewall: Create/assign (see ports below)
-- Create Server → Note the public IP
+**1. Create via Azure CLI:**
+```bash
+# Create resource group
+az group create --name mycelial-rg --location eastus
 
-**2. Configure Firewall (Hetzner Console or CLI):**
+# Create VM
+az vm create \
+  --resource-group mycelial-rg \
+  --name mycelial-peer \
+  --image Ubuntu2404 \
+  --size Standard_B1s \
+  --admin-username azureuser \
+  --generate-ssh-keys \
+  --public-ip-sku Standard
+
+# Open ports
+az vm open-port --resource-group mycelial-rg --name mycelial-peer --port 8080 --priority 1001
+az vm open-port --resource-group mycelial-rg --name mycelial-peer --port 9000 --priority 1002
 ```
-Inbound Rules:
-- TCP 22    → Your IP only (SSH)
-- TCP 80    → 0.0.0.0/0 (HTTP, optional)
-- TCP 8080  → 0.0.0.0/0 (P2P API)
-- TCP 9000  → 0.0.0.0/0 (libp2p)
+
+**2. SSH in and deploy:**
+```bash
+ssh azureuser@AZURE_PUBLIC_IP
+
+# Install Docker
+curl -fsSL https://get.docker.com | sh
+sudo usermod -aG docker $USER
+newgrp docker
+
+# Deploy peer
+docker run -d \
+  --name mycelial-peer \
+  --restart unless-stopped \
+  -p 8080:8080 \
+  -p 9000:9000 \
+  -v mycelial-data:/app/data \
+  ghcr.io/univrs/mycelial-node:latest \
+  --name "AzurePeer" --connect "/ip4/GCP_PUBLIC_IP/tcp/9000"
 ```
 
-**3. SSH in and install Docker:**
+### Hetzner EU Peer Node
+
+**1. Create via hcloud CLI:**
+```bash
+# Install hcloud if needed
+# brew install hcloud  (macOS)
+# sudo apt install hcloud-cli  (Ubuntu)
+
+# Create context (first time)
+hcloud context create univrs
+# Paste API token from console.hetzner.cloud → Security → API Tokens
+
+# Create SSH key (if not already)
+hcloud ssh-key create --name mykey --public-key-from-file ~/.ssh/id_rsa.pub
+
+# Create server
+hcloud server create \
+  --name mycelial-eu \
+  --type cx22 \
+  --image ubuntu-24.04 \
+  --location fsn1 \
+  --ssh-key mykey
+
+# Create firewall
+hcloud firewall create --name mycelial-fw
+hcloud firewall add-rule mycelial-fw --direction in --protocol tcp --port 22 --source-ips 0.0.0.0/0
+hcloud firewall add-rule mycelial-fw --direction in --protocol tcp --port 8080 --source-ips 0.0.0.0/0
+hcloud firewall add-rule mycelial-fw --direction in --protocol tcp --port 9000 --source-ips 0.0.0.0/0
+hcloud firewall apply-to-resource mycelial-fw --type server --server mycelial-eu
+
+# Get IP
+hcloud server ip mycelial-eu
+```
+
+**2. SSH in and deploy:**
 ```bash
 ssh root@HETZNER_IP
 
 # Install Docker
 curl -fsSL https://get.docker.com | sh
-systemctl enable docker
-systemctl start docker
+systemctl enable --now docker
 
-# Verify
-docker --version
-```
-
-**4. Deploy the peer node:**
-```bash
-# Pull and run EU peer node
-docker pull ghcr.io/univrs/mycelial-node:latest
+# Deploy peer
 docker run -d \
   --name mycelial-peer \
   --restart unless-stopped \
@@ -189,18 +329,10 @@ docker run -d \
   -p 9000:9000 \
   -v mycelial-data:/app/data \
   ghcr.io/univrs/mycelial-node:latest \
-  --name "HetznerEU" --connect "/ip4/ORACLE_PUBLIC_IP/tcp/9000"
+  --name "HetznerEU" --connect "/ip4/GCP_PUBLIC_IP/tcp/9000"
 
-# Verify health
-sleep 5
-curl http://localhost:8080/health
-```
-
-**5. Add GitHub Secrets for CD automation:**
-```
-HETZNER_HOST     → The VPS public IP
-HETZNER_USER     → root
-HETZNER_SSH_KEY  → Your private SSH key (the one matching the public key you added)
+# Verify
+curl localhost:8080/health
 ```
 
 ## GitHub Actions CD Workflow
@@ -211,18 +343,23 @@ The CD workflow (`.github/workflows/cd.yml`) handles:
    - Build multi-arch images (AMD64 + ARM64)
    - Push to GitHub Container Registry
 
-2. **Deploy to Oracle (Bootstrap)**
-   - SSH into Oracle VM
+2. **Deploy to GCP (Bootstrap)**
+   - SSH into GCP VM
    - Pull latest images
    - Restart containers
 
-3. **Deploy to Azure (Peer)**
+3. **Deploy to AWS (Peer)**
+   - SSH into AWS EC2
+   - Pull latest images
+   - Restart with bootstrap connection
+
+4. **Deploy to Azure (Peer)**
    - SSH into Azure VM
    - Pull latest images
    - Restart with bootstrap connection
 
-4. **Deploy to AWS (Peer)**
-   - SSH into AWS EC2
+5. **Deploy to Hetzner (EU Peer)**
+   - SSH into Hetzner VPS
    - Pull latest images
    - Restart with bootstrap connection
 
@@ -232,16 +369,15 @@ Add these secrets to GitHub repository settings:
 
 | Secret | Description |
 |--------|-------------|
-| `GHCR_TOKEN` | GitHub token for container registry |
-| `ORACLE_SSH_KEY` | SSH private key for Oracle VM |
-| `ORACLE_HOST` | Oracle VM public IP |
-| `ORACLE_USER` | SSH user for Oracle (usually `ubuntu` or `opc`) |
+| `GCP_SSH_KEY` | SSH private key for GCP VM |
+| `GCP_HOST` | GCP VM external IP |
+| `GCP_USER` | SSH user for GCP (usually your username) |
+| `AWS_SSH_KEY` | SSH private key for AWS EC2 |
+| `AWS_HOST` | AWS EC2 public IP |
+| `AWS_USER` | SSH user for AWS (usually `ubuntu`) |
 | `AZURE_SSH_KEY` | SSH private key for Azure VM |
 | `AZURE_HOST` | Azure VM public IP |
 | `AZURE_USER` | SSH user for Azure (usually `azureuser`) |
-| `AWS_SSH_KEY` | SSH private key for AWS EC2 |
-| `AWS_HOST` | AWS EC2 public IP |
-| `AWS_USER` | SSH user for AWS (usually `ubuntu` or `ec2-user`) |
 | `HETZNER_SSH_KEY` | SSH private key for Hetzner VPS |
 | `HETZNER_HOST` | Hetzner VPS public IP |
 | `HETZNER_USER` | SSH user for Hetzner (usually `root`) |
@@ -249,14 +385,14 @@ Add these secrets to GitHub repository settings:
 ## Health Monitoring
 
 ### Health Check Endpoints
-- Bootstrap: `http://ORACLE_IP:8080/health`
-- Dashboard: `http://ORACLE_IP/health`
-- Azure Peer: `http://AZURE_IP:8080/health`
+- GCP Bootstrap: `http://GCP_IP:8080/health`
+- Dashboard: `http://GCP_IP/health`
 - AWS Peer: `http://AWS_IP:8080/health`
+- Azure Peer: `http://AZURE_IP:8080/health`
 - Hetzner EU Peer: `http://HETZNER_IP:8080/health`
 
 ### P2P Network Status
-Access the dashboard at `http://ORACLE_IP` to view:
+Access the dashboard at `http://GCP_IP` to view:
 - Connected peers across all clouds
 - Gossipsub mesh topology
 - Message propagation between regions
@@ -276,11 +412,11 @@ docker run -d --name mycelial-node \
 
 | Provider | Instance | Monthly Cost | Notes |
 |----------|----------|--------------|-------|
-| Oracle | A1.Flex | $0 | Always Free (ARM) |
-| Azure | B1s | $0* | 750 hrs/month (12 months) |
+| GCP | e2-micro | $0 | Always Free (select regions) |
 | AWS | t2.micro | $0* | 750 hrs/month (12 months) |
+| Azure | B1s | $0* | 750 hrs/month (12 months) |
 | Hetzner | CX22 | €4.75 (~$5) | 2 vCPU, 4GB RAM, EU location |
-| **Total** | | **~$5/mo** | *Azure/AWS free during tier period |
+| **Total** | | **~$5/mo** | *AWS/Azure free during tier period |
 
 ## Future Enhancements
 
